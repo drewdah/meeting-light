@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:www.waveshare.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:docs.waveshare.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "PowerShell($pio = \"C:\\\\Users\\\\Drew\\\\AppData\\\\Local\\\\Packages\\\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\\\LocalCache\\\\local-packages\\\\Python313\\\\Scripts\\\\pio.exe\"; Set-Location \"D:\\\\Projects\\\\meeting-light\\\\firmware\"; & $pio run 2>&1)"
+    ]
+  }
+}

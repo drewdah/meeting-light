@@ -1,0 +1,21 @@
+# PlatformIO
+firmware/.pio/
+firmware/.pioenvs/
+firmware/.piolibdeps/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+*.env
+
+# Service runtime data
+service/data/
+
+# Editor
+.vscode/
+*.swp
