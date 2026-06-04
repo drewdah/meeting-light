@@ -78,26 +78,69 @@ python gen_icons.py
 
 ### Service
 
-Copy `.env.example` to `.env` and fill in your values:
+#### Prerequisites
+
+- Python 3.11 or newer
+- Bluetooth adapter (built-in or USB dongle)
+- On Windows: no extra drivers needed; on Linux: `bluez` must be installed (`sudo apt install bluez`)
+
+#### 1. Copy and edit `.env`
 
 ```bash
 cd service
 cp .env.example .env
-# Edit .env: set ESP32_MAC_ADDRESS, MS_GRAPH_CLIENT_ID, TIMEZONE, etc.
 ```
 
-**Local development (no Docker):**
+Open `.env` and set at minimum:
+
+| Variable | Description |
+|----------|-------------|
+| `ESP32_MAC_ADDRESS` | BLE MAC of your device (see *Finding Your ESP32 MAC Address* below) |
+| `CALENDAR_PROVIDER` | `microsoft` or `google` |
+| `MS_GRAPH_CLIENT_ID` | Azure app client ID (Microsoft only) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | OAuth credentials (Google only) |
+| `TIMEZONE` | Your local IANA timezone, e.g. `America/New_York` |
+
+OAuth client credentials (client ID and secret) live in `.env` only — they are never entered through the web UI.
+
+#### 2. Create a virtual environment and install dependencies
+
+```bash
+# Windows
+python -m venv .venv
+.venv\Scripts\activate
+
+# macOS / Linux
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
 ```bash
 pip install -r requirements.txt
+```
+
+#### 3. Run the service
+
+```bash
 python -m uvicorn src.web.app:app --host 0.0.0.0 --port 8080
 ```
 
-**Docker (for production mini PC deployment):**
+The web UI is available at `http://localhost:8080` (or `http://<your-pc>:8080` from another device on the same network / via Tailscale).
+
+#### 4. Authenticate your calendar (first run)
+
+1. Open the web UI and go to **⚙️ Settings → Calendar**.
+2. Select your provider and click **Sign In**.
+3. A device code will appear — visit the URL shown and enter the code in your browser.
+4. Once authenticated the service starts polling your calendar automatically. Tokens are cached in `data/` and refreshed on subsequent runs.
+
+#### Docker (production mini PC deployment)
+
 ```bash
 docker compose up
 ```
 
-On first run, the web UI at `http://<your-pc>:8080` will show a Microsoft device code. Visit the URL shown and enter the code to authenticate. The service will then start polling your calendar automatically.
+The same `.env` file is used; Docker Compose passes it through automatically.
 
 ### Calendar Provider
 

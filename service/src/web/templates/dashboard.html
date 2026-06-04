@@ -25,12 +25,8 @@
       <span class="text-sm text-gray-400" id="last-updated"></span>
     </div>
 
-    <!-- Status Card (auto-refreshes every 5s) -->
-    <div id="status-card"
-         hx-get="/api/status"
-         hx-trigger="every 5s"
-         hx-swap="none"
-         hx-on::after-request="updateStatus(event)">
+    <!-- Status Card (refreshed by the JS poll loop) -->
+    <div id="status-card">
 
       <div class="bg-gray-800 rounded-xl p-6 space-y-4">
 
@@ -516,9 +512,12 @@
       document.getElementById('log-container').innerHTML = '<div class="text-gray-500 italic">Cleared.</div>';
     }
 
-    // Poll logs every 2 seconds
-    setInterval(fetchLogs, 2000);
-    fetchLogs();
+    // Poll logs + status every 2 seconds (single cadence keeps them in sync)
+    async function poll() {
+      await Promise.all([fetchLogs(), refreshStatus()]);
+    }
+    setInterval(poll, 2000);
+    poll();
 
     async function bleReconnect() {
       await fetch('/api/ble/reconnect', { method: 'POST' });
