@@ -78,6 +78,40 @@ void setup() {
 void loop() {
     buttons_check();
 
+    // Execute any pending BLE command (deferred from BLE callback to avoid stack overflow)
+    PendingCommand cmd;
+    if (pending_get(cmd)) {
+        if (cmd.sleep) {
+            state_set(STATE_OFF);
+            display_off();
+            state_save_to_nvs();
+            power_enter_deep_sleep();
+            return;
+        }
+        if (cmd.brightness > 0) {
+            display_set_brightness(cmd.brightness);
+        }
+        state_set(cmd.state);
+        if (cmd.state == STATE_OFF) {
+            display_off();
+        } else if (cmd.state == STATE_CUSTOM_TEXT) {
+            display_on();
+            if (cmd.icon_id > 0) {
+                display_show_icon_text(cmd.icon_id, cmd.text, cmd.r, cmd.g, cmd.b);
+            } else {
+                display_show_custom_text(cmd.text, cmd.r, cmd.g, cmd.b);
+            }
+        } else {
+            display_on();
+            display_show_preset(cmd.state);
+        }
+        state_save_to_nvs();
+        ble_notify_status(cmd.state,
+                          power_get_battery_percent(),
+                          power_is_charging(),
+                          power_get_battery_mv());
+    }
+
     // Periodic battery status report
     unsigned long now = millis();
     if (now - last_battery_report > BATTERY_READ_INTERVAL_MS) {
@@ -88,10 +122,6 @@ void loop() {
                               power_is_charging(),
                               power_get_battery_mv());
         }
-        Serial.printf("Battery: %d%% (%dmV) %s\n",
-                      power_get_battery_percent(),
-                      power_get_battery_mv(),
-                      power_is_charging() ? "[charging]" : "");
     }
 
     delay(10);

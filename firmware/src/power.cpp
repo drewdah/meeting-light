@@ -43,7 +43,9 @@ void power_init() {
 
 uint8_t power_get_battery_percent() {
     if (!pmu_ok) return 0;
-    return pmu.getBatteryPercent();
+    int pct = pmu.getBatteryPercent();
+    if (pct < 0 || pct > 100) return 0;  // -1 or 255 = no valid reading yet
+    return (uint8_t)pct;
 }
 
 uint16_t power_get_battery_mv() {

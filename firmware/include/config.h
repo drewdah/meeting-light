@@ -44,15 +44,16 @@
 #define BLE_CHAR_DEV_INFO_UUID  "00001003-4d45-4554-4c49-544500000001"
 
 // --- BLE Protocol Opcodes ---
-#define OP_SET_PRESET     0x01
+#define OP_SET_PRESET      0x01
 #define OP_SET_CUSTOM_TEXT 0x02
-#define OP_SLEEP          0x03
-#define OP_WAKE           0x04
-#define OP_IMAGE_START    0x05
-#define OP_IMAGE_CHUNK    0x06
-#define OP_IMAGE_END      0x07
-#define OP_SET_BRIGHTNESS 0x08
-#define OP_PING           0x09
+#define OP_SLEEP           0x03
+#define OP_WAKE            0x04
+#define OP_IMAGE_START     0x05
+#define OP_IMAGE_CHUNK     0x06
+#define OP_IMAGE_END       0x07
+#define OP_SET_BRIGHTNESS  0x08
+#define OP_PING            0x09
+#define OP_SET_ICON_TEXT   0x0A  // [icon_id][r][g][b][text...]
 
 // --- Display States ---
 enum DisplayState : uint8_t {

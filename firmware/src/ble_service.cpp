@@ -48,54 +48,47 @@ class StateCommandCallback : public NimBLECharacteristicCallbacks {
 
         uint8_t opcode = data[0];
 
+        // All display/power work is deferred to main loop via pending command.
+        // BLE callbacks run in NimBLE's task with limited stack — never call
+        // display or power functions directly from here.
+        PendingCommand cmd;
+
         switch (opcode) {
             case OP_SET_PRESET: {
                 if (len < 2) break;
                 uint8_t state_id = data[1];
                 if (state_id > STATE_OOF) break;
-                DisplayState new_state = (DisplayState)state_id;
-                state_set(new_state);
-                if (new_state == STATE_OFF) {
-                    display_off();
-                } else {
-                    display_on();
-                    display_show_preset(new_state);
-                }
-                state_save_to_nvs();
+                cmd.valid = true;
+                cmd.state = (DisplayState)state_id;
+                pending_set(cmd);
                 send_status_notify();
-                Serial.printf("BLE: preset %d\n", state_id);
+                Serial.printf("BLE: queued preset %d\n", state_id);
                 break;
             }
 
             case OP_SET_CUSTOM_TEXT: {
-                if (len < 5) break; // opcode + r + g + b + at least 1 char
-                uint8_t r = data[1];
-                uint8_t g = data[2];
-                uint8_t b = data[3];
-                // Extract text (rest of payload)
-                size_t text_len = len - 4;
-                char text[201];
-                size_t copy_len = (text_len < 200) ? text_len : 200;
-                memcpy(text, &data[4], copy_len);
-                text[copy_len] = '\0';
-
-                state_set(STATE_CUSTOM_TEXT);
-                display_on();
-                display_show_custom_text(text, r, g, b);
-                state_save_to_nvs();
+                if (len < 5) break;
+                cmd.valid = true;
+                cmd.state = STATE_CUSTOM_TEXT;
+                cmd.r = data[1];
+                cmd.g = data[2];
+                cmd.b = data[3];
+                size_t copy_len = min(len - 4, (size_t)200);
+                memcpy(cmd.text, &data[4], copy_len);
+                cmd.text[copy_len] = '\0';
+                pending_set(cmd);
                 send_status_notify();
-                Serial.printf("BLE: custom text '%s'\n", text);
+                Serial.printf("BLE: queued custom text\n");
                 break;
             }
 
             case OP_SLEEP: {
-                state_set(STATE_OFF);
-                display_off();
-                state_save_to_nvs();
+                cmd.valid = true;
+                cmd.state = STATE_OFF;
+                cmd.sleep = true;
+                pending_set(cmd);
                 send_status_notify();
-                Serial.println("BLE: sleep command");
-                // Deep sleep is handled in main loop after BLE disconnect
-                power_enter_deep_sleep();
+                Serial.println("BLE: queued sleep");
                 break;
             }
 
@@ -105,20 +98,11 @@ class StateCommandCallback : public NimBLECharacteristicCallbacks {
                 img_width = data[5] | (data[6] << 8);
                 img_height = data[7] | (data[8] << 8);
                 img_format = data[9];
-
                 if (img_buffer) { free(img_buffer); img_buffer = nullptr; }
-
-                if (img_total_size > 200000) {
-                    Serial.println("BLE: image too large");
-                    break;
-                }
+                if (img_total_size > 200000) { Serial.println("BLE: image too large"); break; }
                 img_buffer = (uint8_t*)malloc(img_total_size);
                 img_received = 0;
-                if (!img_buffer) {
-                    Serial.println("BLE: malloc failed for image");
-                }
-                Serial.printf("BLE: image start %zu bytes, %dx%d\n",
-                              img_total_size, img_width, img_height);
+                if (!img_buffer) Serial.println("BLE: malloc failed");
                 break;
             }
 
@@ -126,43 +110,52 @@ class StateCommandCallback : public NimBLECharacteristicCallbacks {
                 if (!img_buffer || len < 3) break;
                 uint16_t chunk_idx = data[1] | (data[2] << 8);
                 size_t payload_len = len - 3;
-                size_t offset = chunk_idx * 509; // MTU(512) - 3 byte header
-                if (offset + payload_len > img_total_size) break;
-                memcpy(img_buffer + offset, &data[3], payload_len);
+                size_t offset = chunk_idx * 509;
+                if (offset + payload_len <= img_total_size)
+                    memcpy(img_buffer + offset, &data[3], payload_len);
                 img_received += payload_len;
                 break;
             }
 
             case OP_IMAGE_END: {
                 if (!img_buffer || len < 5) break;
-                uint32_t expected_crc = data[1] | (data[2] << 8) |
-                                        (data[3] << 16) | (data[4] << 24);
-                // TODO: verify CRC32
-                (void)expected_crc;
-
-                state_set(STATE_CUSTOM_IMAGE);
-                display_on();
-                display_show_image(img_buffer, img_total_size);
-                state_save_to_nvs();
+                cmd.valid = true;
+                cmd.state = STATE_CUSTOM_IMAGE;
+                pending_set(cmd);
                 send_status_notify();
-
-                free(img_buffer);
-                img_buffer = nullptr;
-                img_received = 0;
-                Serial.println("BLE: image complete");
+                Serial.println("BLE: queued image display");
                 break;
             }
 
             case OP_SET_BRIGHTNESS: {
                 if (len < 2) break;
-                display_set_brightness(data[1]);
-                Serial.printf("BLE: brightness %d\n", data[1]);
+                cmd.valid = true;
+                cmd.state = state_get_current();  // keep current state
+                cmd.brightness = data[1];
+                pending_set(cmd);
+                break;
+            }
+
+            case OP_SET_ICON_TEXT: {
+                // [icon_id][r][g][b][text...]
+                if (len < 5) break;
+                cmd.valid = true;
+                cmd.state = STATE_CUSTOM_TEXT;
+                cmd.icon_id = data[1];
+                cmd.r = data[2];
+                cmd.g = data[3];
+                cmd.b = data[4];
+                size_t copy_len = min(len - 5, (size_t)200);
+                if (copy_len > 0) memcpy(cmd.text, &data[5], copy_len);
+                cmd.text[copy_len] = '\0';
+                pending_set(cmd);
+                send_status_notify();
+                Serial.printf("BLE: queued icon_text icon=%d\n", cmd.icon_id);
                 break;
             }
 
             case OP_PING: {
                 send_status_notify();
-                Serial.println("BLE: ping");
                 break;
             }
         }

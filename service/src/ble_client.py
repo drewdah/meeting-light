@@ -1,11 +1,11 @@
 """
 BLE central client — connects to the ESP32 and sends state commands.
-Runs as a background asyncio task.
+Runs as a background asyncio task. All BLE writes happen inside the
+connection loop task to avoid cross-task issues.
 """
 
 import asyncio
 import logging
-import struct
 from typing import Optional
 
 from bleak import BleakClient, BleakScanner
@@ -30,6 +30,10 @@ OP_IMAGE_CHUNK     = 0x06
 OP_IMAGE_END       = 0x07
 OP_SET_BRIGHTNESS  = 0x08
 OP_PING            = 0x09
+OP_SET_ICON_TEXT   = 0x0A
+
+RECONNECT_INTERVAL = 3  # seconds between reconnect attempts
+KEEPALIVE_INTERVAL = 30  # seconds between pings when idle
 
 
 class BLEClient:
@@ -39,11 +43,12 @@ class BLEClient:
         self._connected = False
         self._running = False
         self._pending_state: Optional[tuple[DisplayState, Optional[CustomPayload]]] = None
-        self._lock = asyncio.Lock()
+        # Event set whenever there's a pending state to send
+        self._send_event: Optional[asyncio.Event] = None
 
     async def start(self):
-        """Start the BLE connection loop."""
         self._running = True
+        self._send_event = asyncio.Event()
         state_machine.on_transition(self._on_state_transition)
         await self._connection_loop()
 
@@ -53,10 +58,10 @@ class BLEClient:
             await self._client.disconnect()
 
     async def _on_state_transition(self, state: DisplayState, custom: Optional[CustomPayload]):
-        """Called by state machine on every transition — queue the command."""
+        """Called by state machine — store pending state and wake connection loop."""
         self._pending_state = (state, custom)
-        if self._connected:
-            await self._send_pending()
+        if self._send_event:
+            self._send_event.set()
 
     async def _connection_loop(self):
         while self._running:
@@ -65,11 +70,11 @@ class BLEClient:
             except Exception as e:
                 logger.warning(f"BLE connection error: {e}")
             if self._running:
-                logger.info(f"Reconnecting in {settings.ble_reconnect_interval_seconds}s...")
-                await asyncio.sleep(settings.ble_reconnect_interval_seconds)
+                logger.info(f"Reconnecting in {RECONNECT_INTERVAL}s...")
+                await asyncio.sleep(RECONNECT_INTERVAL)
 
     async def _connect_and_run(self):
-        mac = settings.esp32_mac_address
+        mac = settings_store_get_mac()
         if not mac:
             logger.info("No ESP32 MAC configured, scanning for 'MeetingLight'...")
             device = await BleakScanner.find_device_by_name("MeetingLight", timeout=10)
@@ -85,8 +90,16 @@ class BLEClient:
             self._connected = True
             logger.info("BLE connected")
 
-            # Get command characteristic
+            # Find command characteristic
             self._cmd_char = client.services.get_characteristic(BLE_CHAR_STATE_CMD_UUID)
+            if self._cmd_char:
+                logger.info("Command characteristic found")
+            else:
+                logger.error("Command characteristic NOT found! Available:")
+                for svc in client.services:
+                    for char in svc.characteristics:
+                        logger.error(f"  {char.uuid} [{','.join(char.properties)}]")
+                return
 
             # Subscribe to status notifications
             status_char = client.services.get_characteristic(BLE_CHAR_DEV_STATUS_UUID)
@@ -94,20 +107,32 @@ class BLEClient:
                 await client.start_notify(status_char, self._on_status_notify)
 
             # Send current state immediately on connect
-            await self._send_pending()
+            if self._pending_state:
+                await self._send_pending(client)
 
-            # Keep alive loop
+            # Main send loop — wait for events, send when triggered
             while self._running and client.is_connected:
-                await asyncio.sleep(30)
-                await self._send_ping()
+                try:
+                    await asyncio.wait_for(
+                        self._send_event.wait(),
+                        timeout=KEEPALIVE_INTERVAL
+                    )
+                    self._send_event.clear()
+                    if self._pending_state:
+                        await self._send_pending(client)
+                except asyncio.TimeoutError:
+                    # Keepalive ping
+                    await self._write(client, [OP_PING])
 
     def _on_disconnect(self, client: BleakClient):
         self._connected = False
         self._cmd_char = None
-        logger.warning("BLE disconnected")
+        logger.warning("BLE disconnected — will reconnect")
+        # Wake connection loop so it exits the wait and reconnects
+        if self._send_event:
+            self._send_event.set()
 
     async def _on_status_notify(self, char: BleakGATTCharacteristic, data: bytearray):
-        """Parse status notification from ESP32: [state, batt%, charging, mv_lo, mv_hi]"""
         if len(data) < 5:
             return
         batt_pct = data[1]
@@ -116,49 +141,61 @@ class BLEClient:
         await state_machine.update_battery(batt_pct, batt_mv, True)
         logger.debug(f"Battery: {batt_pct}% ({batt_mv}mV) {'[charging]' if charging else ''}")
 
-    async def _send_pending(self):
-        if not self._pending_state or not self._cmd_char or not self._connected:
+    async def _send_pending(self, client: BleakClient):
+        if not self._pending_state:
             return
-        async with self._lock:
-            state, custom = self._pending_state
-            await self._send_state(state, custom)
+        state, custom = self._pending_state
+        await self._send_state(client, state, custom)
 
-    async def _send_state(self, state: DisplayState, custom: Optional[CustomPayload]):
-        if not self._cmd_char or not self._client:
-            return
+    async def _send_state(self, client: BleakClient, state: DisplayState,
+                          custom: Optional[CustomPayload]):
         try:
             if state == DisplayState.SLEEPING:
-                await self._write([OP_SLEEP])
+                await self._write(client, [OP_SLEEP])
                 logger.info("Sent: SLEEP")
             elif state == DisplayState.CUSTOM_TEXT and custom:
                 text_bytes = custom.text.encode("utf-8")[:200]
-                payload = bytes([OP_SET_CUSTOM_TEXT, custom.r, custom.g, custom.b]) + text_bytes
-                await self._write(payload)
-                logger.info(f"Sent: CUSTOM_TEXT '{custom.text}'")
+                if custom.icon_id > 0:
+                    payload = bytes([OP_SET_ICON_TEXT, custom.icon_id,
+                                     custom.r, custom.g, custom.b]) + text_bytes
+                    logger.info(f"Sent: ICON_TEXT icon={custom.icon_id} '{custom.text}'")
+                else:
+                    payload = bytes([OP_SET_CUSTOM_TEXT, custom.r, custom.g, custom.b]) + text_bytes
+                    logger.info(f"Sent: CUSTOM_TEXT '{custom.text}'")
+                await self._write(client, payload)
             elif state in (DisplayState.OFF, DisplayState.IN_MEETING,
                            DisplayState.WFH, DisplayState.OOF):
-                await self._write([OP_SET_PRESET, int(state)])
+                await self._write(client, [OP_SET_PRESET, int(state)])
                 logger.info(f"Sent: PRESET {state.name}")
         except Exception as e:
-            logger.error(f"BLE write error: {e}")
+            logger.error(f"BLE write error: {e} — disconnecting to force reconnect")
             self._connected = False
+            await client.disconnect()
 
-    async def _send_ping(self):
-        if not self._cmd_char or not self._client:
-            return
-        try:
-            await self._write([OP_PING])
-        except Exception as e:
-            logger.warning(f"Ping failed: {e}")
-            self._connected = False
-
-    async def _write(self, data: list[int] | bytes):
-        if self._client and self._cmd_char:
-            await self._client.write_gatt_char(self._cmd_char, bytes(data), response=False)
+    async def _write(self, client: BleakClient, data: list[int] | bytes):
+        if self._cmd_char:
+            await client.write_gatt_char(self._cmd_char, bytes(data), response=False)
 
     @property
     def is_connected(self) -> bool:
         return self._connected
+
+    async def force_reconnect(self):
+        """Force disconnect — connection loop will reconnect automatically."""
+        self._connected = False
+        if self._client and self._client.is_connected:
+            await self._client.disconnect()
+        if self._send_event:
+            self._send_event.set()
+
+
+def settings_store_get_mac() -> str:
+    """Get MAC from settings store (allows runtime updates)."""
+    try:
+        from . import settings_store
+        return settings_store.get("esp32_mac_address", settings.esp32_mac_address)
+    except Exception:
+        return settings.esp32_mac_address
 
 
 ble_client = BLEClient()

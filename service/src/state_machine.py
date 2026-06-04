@@ -16,6 +16,7 @@ from enum import IntEnum
 from typing import Optional, Callable
 
 from .config import settings
+from . import settings_store
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class CustomPayload:
     r: int = 255
     g: int = 255
     b: int = 255
+    icon_id: int = 0  # 0 = no icon, matches firmware ICONS list
 
 
 @dataclass
@@ -72,10 +74,14 @@ class StateMachine:
         self._on_transition.append(callback)
 
     def _is_business_hours(self) -> bool:
-        now = datetime.now(settings.tz)
+        import zoneinfo
+        tz = zoneinfo.ZoneInfo(settings_store.get("timezone", settings.timezone))
+        now = datetime.now(tz)
         if now.weekday() not in settings.business_days:
             return False
-        return settings.business_hours_start <= now.hour < settings.business_hours_end
+        start = settings_store.get("business_hours_start", settings.business_hours_start)
+        end = settings_store.get("business_hours_end", settings.business_hours_end)
+        return start <= now.hour < end
 
     def _compute_state(self) -> tuple[DisplayState, Optional[CustomPayload], str]:
         """Compute the current effective state with priority."""

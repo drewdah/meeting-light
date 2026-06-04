@@ -19,6 +19,7 @@ from ..state_machine import DisplayState, CustomPayload, state_machine
 from ..graph_client import graph_client
 from ..ble_client import ble_client
 from ..scheduler import graph_poll_loop, tick_loop
+from .. import settings_store
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,7 @@ async def dashboard(request: Request):
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "snap": snapshot_to_dict(snap),
+        "settings": settings_store.all_settings(),
     })
 
 
@@ -130,9 +132,10 @@ async def set_custom_override(
     r: int = Form(default=255),
     g: int = Form(default=255),
     b: int = Form(default=0),
+    icon_id: int = Form(default=0),
     duration_minutes: Optional[int] = Form(default=60)
 ):
-    custom = CustomPayload(text=text[:200], r=r, g=g, b=b)
+    custom = CustomPayload(text=text[:200], r=r, g=g, b=b, icon_id=icon_id)
     await state_machine.set_override(DisplayState.CUSTOM_TEXT, custom=custom,
                                      duration_minutes=duration_minutes)
     return {"ok": True}
@@ -158,3 +161,37 @@ async def start_auth():
 async def poll_auth():
     success = await graph_client.poll_device_code()
     return {"authenticated": success}
+
+
+@app.post("/api/ble/reconnect")
+async def ble_reconnect():
+    """Force-disconnect and reconnect BLE."""
+    await ble_client.force_reconnect()
+    return {"ok": True}
+
+
+@app.get("/api/settings")
+async def get_settings():
+    return settings_store.all_settings()
+
+
+@app.post("/api/settings")
+async def update_settings(
+    business_hours_start: int = Form(...),
+    business_hours_end: int = Form(...),
+    timezone: str = Form(...),
+    esp32_mac_address: str = Form(...),
+    graph_poll_interval_seconds: int = Form(...),
+    default_brightness: int = Form(...),
+):
+    settings_store.update({
+        "business_hours_start": business_hours_start,
+        "business_hours_end": business_hours_end,
+        "timezone": timezone,
+        "esp32_mac_address": esp32_mac_address,
+        "graph_poll_interval_seconds": graph_poll_interval_seconds,
+        "default_brightness": default_brightness,
+    })
+    # Trigger state machine tick to re-evaluate business hours
+    await state_machine.tick()
+    return {"ok": True}

@@ -54,17 +54,24 @@
             {% if snap.last_seen %}
             <div class="text-gray-500 text-xs" id="last-seen">Last seen {{ snap.last_seen }}</div>
             {% endif %}
+            <button onclick="bleReconnect()" class="mt-2 text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded">
+              ↺ Reconnect
+            </button>
           </div>
 
           <div class="bg-gray-700 rounded-lg p-3">
             <div class="text-gray-400 mb-1">Battery</div>
-            {% if snap.battery_percent is not none %}
+            {% if snap.battery_percent %}
             <div id="battery" class="font-medium {{ 'text-red-400' if snap.battery_percent < 20 else 'text-green-400' }}">
               {{ snap.battery_percent }}%
             </div>
-            <div class="text-gray-500 text-xs">{{ snap.battery_mv }}mV</div>
+            <div class="text-gray-500 text-xs" id="battery-mv">{{ snap.battery_mv }}mV</div>
+            {% elif snap.ble_connected %}
+            <div id="battery" class="font-medium text-blue-400">⚡ USB</div>
+            <div class="text-gray-500 text-xs" id="battery-mv">No battery</div>
             {% else %}
             <div id="battery" class="text-gray-500">Unknown</div>
+            <div class="text-gray-500 text-xs" id="battery-mv"></div>
             {% endif %}
           </div>
 
@@ -141,12 +148,96 @@
             <label class="text-sm text-gray-400">Background:</label>
             <input id="custom-color" type="color" value="#1d4ed8" class="h-8 w-16 rounded cursor-pointer">
           </div>
+          <!-- Emoji icon picker -->
+          <div>
+            <label class="text-sm text-gray-400 block mb-2">Icon (optional):</label>
+            <div class="flex flex-wrap gap-2" id="icon-picker">
+              <button type="button" onclick="selectIcon(0, this)"
+                class="icon-btn selected w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-indigo-500"
+                title="No icon">✖</button>
+              <button type="button" onclick="selectIcon(1, this)"
+                class="icon-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent"
+                title="In a Meeting">🔴</button>
+              <button type="button" onclick="selectIcon(2, this)"
+                class="icon-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent"
+                title="Working From Home">🏠</button>
+              <button type="button" onclick="selectIcon(3, this)"
+                class="icon-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent"
+                title="Out of Office">✈️</button>
+              <button type="button" onclick="selectIcon(4, this)"
+                class="icon-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent"
+                title="Out for Lunch">🍕</button>
+              <button type="button" onclick="selectIcon(5, this)"
+                class="icon-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent"
+                title="Focus / Do Not Disturb">🎧</button>
+              <button type="button" onclick="selectIcon(6, this)"
+                class="icon-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent"
+                title="Back Soon">⏰</button>
+              <button type="button" onclick="selectIcon(7, this)"
+                class="icon-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent"
+                title="Busy">🚫</button>
+            </div>
+            <input type="hidden" id="selected-icon-id" value="0">
+          </div>
           <button onclick="setCustom()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded text-sm">
             Show Custom Message
           </button>
         </div>
       </details>
     </div>
+
+    <!-- Settings Panel -->
+    <details class="bg-gray-800 rounded-xl p-6">
+      <summary class="cursor-pointer font-semibold hover:text-white text-gray-300">⚙️ Settings</summary>
+      <form id="settings-form" class="mt-4 space-y-4" onsubmit="saveSettings(event)">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="text-sm text-gray-400 block mb-1">Business Hours Start</label>
+            <input type="number" name="business_hours_start" min="0" max="23"
+                   value="{{ settings.business_hours_start }}"
+                   class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="text-sm text-gray-400 block mb-1">Business Hours End</label>
+            <input type="number" name="business_hours_end" min="1" max="24"
+                   value="{{ settings.business_hours_end }}"
+                   class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
+          </div>
+        </div>
+        <div>
+          <label class="text-sm text-gray-400 block mb-1">Timezone</label>
+          <input type="text" name="timezone" value="{{ settings.timezone }}"
+                 placeholder="America/New_York"
+                 class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="text-sm text-gray-400 block mb-1">ESP32 MAC Address</label>
+          <input type="text" name="esp32_mac_address" value="{{ settings.esp32_mac_address }}"
+                 placeholder="AA:BB:CC:DD:EE:FF"
+                 class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm font-mono">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="text-sm text-gray-400 block mb-1">Poll Interval (seconds)</label>
+            <input type="number" name="graph_poll_interval_seconds" min="30" max="300"
+                   value="{{ settings.graph_poll_interval_seconds }}"
+                   class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
+          </div>
+          <div>
+            <label class="text-sm text-gray-400 block mb-1">Brightness (0-255)</label>
+            <input type="number" name="default_brightness" min="0" max="255"
+                   value="{{ settings.default_brightness }}"
+                   class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded text-sm">
+            Save Settings
+          </button>
+          <span id="settings-saved" class="text-green-400 text-sm hidden">✓ Saved</span>
+        </div>
+      </form>
+    </details>
 
   </div>
 
@@ -165,6 +256,18 @@
       refreshStatus();
     }
 
+    let selectedIconId = 0;
+    function selectIcon(id, btn) {
+      selectedIconId = id;
+      document.getElementById('selected-icon-id').value = id;
+      document.querySelectorAll('.icon-btn').forEach(b => {
+        b.classList.remove('border-indigo-500');
+        b.classList.add('border-transparent');
+      });
+      btn.classList.add('border-indigo-500');
+      btn.classList.remove('border-transparent');
+    }
+
     async function setCustom() {
       const text = document.getElementById('custom-text').value.trim();
       if (!text) return;
@@ -175,9 +278,25 @@
       const fd = new FormData();
       fd.append('text', text);
       fd.append('r', r); fd.append('g', g); fd.append('b', b);
+      fd.append('icon_id', selectedIconId);
       const dur = getDuration();
       if (dur) fd.append('duration_minutes', dur);
       await fetch('/api/override/custom', { method: 'POST', body: fd });
+      refreshStatus();
+    }
+
+    async function bleReconnect() {
+      await fetch('/api/ble/reconnect', { method: 'POST' });
+      refreshStatus();
+    }
+
+    async function saveSettings(event) {
+      event.preventDefault();
+      const fd = new FormData(document.getElementById('settings-form'));
+      await fetch('/api/settings', { method: 'POST', body: fd });
+      const saved = document.getElementById('settings-saved');
+      saved.classList.remove('hidden');
+      setTimeout(() => saved.classList.add('hidden'), 3000);
       refreshStatus();
     }
 

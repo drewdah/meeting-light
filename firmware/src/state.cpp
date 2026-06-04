@@ -4,6 +4,22 @@
 static Preferences prefs;
 static DisplayState current_state = STATE_OFF;
 
+// Single-slot pending command — written by BLE task, consumed by main loop
+static volatile bool _pending_valid = false;
+static PendingCommand _pending_cmd;
+
+void pending_set(const PendingCommand& cmd) {
+    _pending_cmd = cmd;
+    _pending_valid = true;  // write last so reader sees consistent data
+}
+
+bool pending_get(PendingCommand& cmd) {
+    if (!_pending_valid) return false;
+    _pending_valid = false;
+    cmd = _pending_cmd;
+    return true;
+}
+
 void state_init() {
     prefs.begin("mlight", false);
     current_state = state_load_from_nvs();
