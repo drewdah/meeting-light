@@ -197,6 +197,32 @@
       </details>
     </div>
 
+    <!-- Log Panel -->
+    <details class="bg-gray-800 rounded-xl p-6" id="log-panel">
+      <summary class="cursor-pointer font-semibold hover:text-white text-gray-300 flex items-center justify-between">
+        <span>📋 Logs</span>
+        <span id="log-error-badge" class="hidden bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">errors</span>
+      </summary>
+      <div class="mt-3 flex items-center gap-3 mb-2">
+        <select id="log-level" onchange="filterLogs()" class="bg-gray-700 text-white rounded px-2 py-1 text-xs">
+          <option value="ALL">All levels</option>
+          <option value="INFO">INFO+</option>
+          <option value="WARNING">WARNING+</option>
+          <option value="ERROR">ERROR only</option>
+        </select>
+        <button onclick="clearLogs()" class="text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded">
+          Clear
+        </button>
+        <label class="flex items-center gap-1 text-xs text-gray-400 cursor-pointer">
+          <input type="checkbox" id="log-autoscroll" checked> Auto-scroll
+        </label>
+      </div>
+      <div id="log-container"
+           class="bg-gray-900 rounded p-3 h-64 overflow-y-auto font-mono text-xs space-y-0.5">
+        <div class="text-gray-500 italic">Waiting for logs...</div>
+      </div>
+    </details>
+
     <!-- Settings Panel -->
     <details class="bg-gray-800 rounded-xl p-6">
       <summary class="cursor-pointer font-semibold hover:text-white text-gray-300">⚙️ Settings</summary>
@@ -314,6 +340,63 @@
       await fetch('/api/override/custom', { method: 'POST', body: fd });
       refreshStatus();
     }
+
+    // Log panel
+    let lastLogCount = 0;
+    const LEVEL_ORDER = { DEBUG: 0, INFO: 1, WARNING: 2, ERROR: 3, CRITICAL: 4 };
+
+    async function fetchLogs() {
+      try {
+        const resp = await fetch('/api/logs?limit=200');
+        const logs = await resp.json();
+        renderLogs(logs);
+      } catch (e) {}
+    }
+
+    function filterLogs() { fetchLogs(); }
+
+    function renderLogs(logs) {
+      const minLevel = document.getElementById('log-level').value;
+      const minOrder = LEVEL_ORDER[minLevel] ?? 0;
+      const filtered = minLevel === 'ALL' ? logs : logs.filter(l => (LEVEL_ORDER[l.level] ?? 0) >= minOrder);
+
+      const container = document.getElementById('log-container');
+      const atBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 20;
+
+      const hasErrors = logs.some(l => l.level === 'ERROR' || l.level === 'CRITICAL');
+      document.getElementById('log-error-badge').classList.toggle('hidden', !hasErrors);
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="text-gray-500 italic">No logs yet...</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(l =>
+        `<div class="flex gap-2 leading-5">
+          <span class="text-gray-500 shrink-0">${l.time}</span>
+          <span class="${l.color} shrink-0 w-16">${l.level}</span>
+          <span class="text-gray-400 shrink-0 w-20 truncate" title="${l.name}">${l.name}</span>
+          <span class="${l.color} break-all">${escHtml(l.message)}</span>
+        </div>`
+      ).join('');
+
+      if (document.getElementById('log-autoscroll').checked && atBottom) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    async function clearLogs() {
+      await fetch('/api/logs', { method: 'DELETE' });
+      document.getElementById('log-container').innerHTML = '<div class="text-gray-500 italic">Cleared.</div>';
+    }
+
+    // Poll logs every 2 seconds
+    setInterval(fetchLogs, 2000);
+    fetchLogs();
 
     async function bleReconnect() {
       await fetch('/api/ble/reconnect', { method: 'POST' });

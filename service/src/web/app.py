@@ -20,6 +20,7 @@ from ..graph_client import graph_client
 from ..ble_client import ble_client
 from ..scheduler import graph_poll_loop, tick_loop
 from .. import settings_store
+from .. import log_buffer
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "t
 async def lifespan(app: FastAPI):
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    log_buffer.setup(level=logging.DEBUG)
 
     # Start background tasks
     tasks = [
@@ -148,6 +150,17 @@ async def set_custom_override(
 @app.delete("/api/override")
 async def clear_override():
     await state_machine.clear_override()
+    return {"ok": True}
+
+
+@app.get("/api/logs")
+async def get_logs(limit: int = 100):
+    return log_buffer.get_logs(limit)
+
+
+@app.delete("/api/logs")
+async def clear_logs():
+    log_buffer.clear_logs()
     return {"ok": True}
 
 

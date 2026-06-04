@@ -67,14 +67,14 @@ class StateCommandCallback : public NimBLECharacteristicCallbacks {
             }
 
             case OP_SET_CUSTOM_TEXT: {
-                if (len < 5) break;
+                // [opcode][bg_r][bg_g][bg_b][fg_r][fg_g][fg_b][text...]
+                if (len < 8) break;
                 cmd.valid = true;
                 cmd.state = STATE_CUSTOM_TEXT;
-                cmd.r = data[1];
-                cmd.g = data[2];
-                cmd.b = data[3];
-                size_t copy_len = min(len - 4, (size_t)200);
-                memcpy(cmd.text, &data[4], copy_len);
+                cmd.r = data[1]; cmd.g = data[2]; cmd.b = data[3];
+                cmd.fg_r = data[4]; cmd.fg_g = data[5]; cmd.fg_b = data[6];
+                size_t copy_len = min(len - 7, (size_t)200);
+                memcpy(cmd.text, &data[7], copy_len);
                 cmd.text[copy_len] = '\0';
                 pending_set(cmd);
                 send_status_notify();
@@ -133,24 +133,6 @@ class StateCommandCallback : public NimBLECharacteristicCallbacks {
                 cmd.state = state_get_current();  // keep current state
                 cmd.brightness = data[1];
                 pending_set(cmd);
-                break;
-            }
-
-            case OP_SET_ICON_TEXT: {
-                // [icon_id][r][g][b][text...]
-                if (len < 5) break;
-                cmd.valid = true;
-                cmd.state = STATE_CUSTOM_TEXT;
-                cmd.icon_id = data[1];
-                cmd.r = data[2];
-                cmd.g = data[3];
-                cmd.b = data[4];
-                size_t copy_len = min(len - 5, (size_t)200);
-                if (copy_len > 0) memcpy(cmd.text, &data[5], copy_len);
-                cmd.text[copy_len] = '\0';
-                pending_set(cmd);
-                send_status_notify();
-                Serial.printf("BLE: queued icon_text icon=%d\n", cmd.icon_id);
                 break;
             }
 
@@ -236,4 +218,11 @@ void ble_notify_status(DisplayState state, uint8_t battery_pct, bool charging, u
 
 bool ble_is_connected() {
     return connected;
+}
+
+const uint8_t* ble_get_image_data() { return img_buffer; }
+size_t ble_get_image_len() { return img_total_size; }
+void ble_free_image() {
+    if (img_buffer) { free(img_buffer); img_buffer = nullptr; }
+    img_total_size = 0; img_received = 0;
 }

@@ -6,10 +6,11 @@
 struct PendingCommand {
     bool valid = false;
     DisplayState state = STATE_OFF;
-    // Custom text / icon fields
-    uint8_t r = 255, g = 255, b = 255;
+    // Background color
+    uint8_t r = 0, g = 0, b = 0;
+    // Foreground (text) color — 0,0,0 = auto
+    uint8_t fg_r = 255, fg_g = 255, fg_b = 255;
     char text[201] = {};
-    uint8_t icon_id = 0;      // 0 = no icon
     uint8_t brightness = 0;   // 0 = no brightness change
     bool sleep = false;
 };

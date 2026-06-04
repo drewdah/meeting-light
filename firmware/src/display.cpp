@@ -3,7 +3,10 @@
 #include <Arduino_GFX_Library.h>
 #include <Adafruit_XCA9554.h>
 #include <Wire.h>
+#include <JPEGDEC.h>
 #include "icon_data.h"
+
+static JPEGDEC jpeg;
 
 // RGB565 color constants
 #define BLACK   0x0000
@@ -125,14 +128,12 @@ void display_show_preset(DisplayState state) {
     screen_on = true;
 }
 
-void display_show_custom_text(const char* text, uint8_t r, uint8_t g, uint8_t b) {
+void display_show_custom_text(const char* text, uint8_t r, uint8_t g, uint8_t b,
+                              uint8_t fg_r, uint8_t fg_g, uint8_t fg_b) {
     if (!gfx) return;
 
     uint16_t bg_color = gfx->color565(r, g, b);
-
-    // Choose white or black text based on background luminance
-    float lum = 0.299f * r + 0.587f * g + 0.114f * b;
-    uint16_t fg_color = (lum > 128) ? BLACK : WHITE;
+    uint16_t fg_color = gfx->color565(fg_r, fg_g, fg_b);
 
     // Auto-size text: start large, reduce if it doesn't fit
     uint8_t text_size = 5;
@@ -207,10 +208,28 @@ void display_show_icon_text(uint8_t icon_id, const char* text, uint8_t r, uint8_
     screen_on = true;
 }
 
+// JPEGDEC draw callback
+static int jpeg_draw_callback(JPEGDRAW* pDraw) {
+    if (!gfx) return 0;
+    gfx->draw16bitRGBBitmap(pDraw->x, pDraw->y,
+                             pDraw->pPixels, pDraw->iWidth, pDraw->iHeight);
+    return 1;
+}
+
 void display_show_image(const uint8_t* jpeg_data, size_t jpeg_len) {
-    // TODO: Phase 6 — JPEG decode and blit to framebuffer
-    (void)jpeg_data;
-    (void)jpeg_len;
+    if (!gfx || !jpeg_data || jpeg_len == 0) return;
+
+    if (jpeg.openRAM((uint8_t*)jpeg_data, (int)jpeg_len, jpeg_draw_callback)) {
+        jpeg.setPixelType(RGB565_LITTLE_ENDIAN);
+        gfx->startWrite();
+        jpeg.decode(0, 0, 0);
+        gfx->endWrite();
+        jpeg.close();
+        screen_on = true;
+        Serial.printf("JPEG decoded: %dx%d\n", jpeg.getWidth(), jpeg.getHeight());
+    } else {
+        Serial.println("JPEG decode failed");
+    }
 }
 
 void display_set_brightness(uint8_t level) {

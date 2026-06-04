@@ -96,11 +96,12 @@ void loop() {
             display_off();
         } else if (cmd.state == STATE_CUSTOM_TEXT) {
             display_on();
-            if (cmd.icon_id > 0) {
-                display_show_icon_text(cmd.icon_id, cmd.text, cmd.r, cmd.g, cmd.b);
-            } else {
-                display_show_custom_text(cmd.text, cmd.r, cmd.g, cmd.b);
-            }
+            display_show_custom_text(cmd.text, cmd.r, cmd.g, cmd.b,
+                                     cmd.fg_r, cmd.fg_g, cmd.fg_b);
+        } else if (cmd.state == STATE_CUSTOM_IMAGE) {
+            display_on();
+            display_show_image(ble_get_image_data(), ble_get_image_len());
+            ble_free_image();
         } else {
             display_on();
             display_show_preset(cmd.state);
