@@ -6,6 +6,8 @@ connection loop task to avoid cross-task issues.
 
 import asyncio
 import logging
+import struct
+import zlib
 from typing import Optional
 
 from bleak import BleakClient, BleakScanner
@@ -13,6 +15,7 @@ from bleak.backends.characteristic import BleakGATTCharacteristic
 
 from .config import settings
 from .state_machine import DisplayState, CustomPayload, state_machine
+from .image_processor import render_screen
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +37,13 @@ OP_SET_ICON_TEXT   = 0x0A
 
 RECONNECT_INTERVAL = 3  # seconds between reconnect attempts
 KEEPALIVE_INTERVAL = 30  # seconds between pings when idle
+
+# Preset state rendering config: (emoji, text, bg_r, bg_g, bg_b)
+_PRESET_CONFIG = {
+    DisplayState.IN_MEETING: ("🔴", "In a\nMeeting",      200, 20,  20),
+    DisplayState.WFH:        ("🏠", "Working\nFrom Home",  10,  30, 120),
+    DisplayState.OOF:        ("✈️", "Out of\nOffice",      60,  0,  120),
+}
 
 
 class BLEClient:
@@ -153,24 +163,84 @@ class BLEClient:
             if state == DisplayState.SLEEPING:
                 await self._write(client, [OP_SLEEP])
                 logger.info("Sent: SLEEP")
+
             elif state == DisplayState.CUSTOM_TEXT and custom:
-                text_bytes = custom.text.encode("utf-8")[:200]
-                if custom.icon_id > 0:
-                    payload = bytes([OP_SET_ICON_TEXT, custom.icon_id,
-                                     custom.r, custom.g, custom.b]) + text_bytes
-                    logger.info(f"Sent: ICON_TEXT icon={custom.icon_id} '{custom.text}'")
+                if custom.emoji:
+                    # Render full screen JPEG and transfer via image protocol
+                    await self._send_screen_image(client, custom)
                 else:
-                    payload = bytes([OP_SET_CUSTOM_TEXT, custom.r, custom.g, custom.b]) + text_bytes
+                    text_bytes = custom.text.encode("utf-8")[:200]
+                    # Include fg color: [OP][r][g][b][fg_r][fg_g][fg_b][text]
+                    # Use auto fg (255,255,255) if not set
+                    fg_r = custom.fg_r if custom.fg_r >= 0 else 255
+                    fg_g = custom.fg_g if custom.fg_g >= 0 else 255
+                    fg_b = custom.fg_b if custom.fg_b >= 0 else 255
+                    payload = bytes([OP_SET_CUSTOM_TEXT, custom.r, custom.g, custom.b,
+                                     fg_r, fg_g, fg_b]) + text_bytes
+                    await self._write(client, payload)
                     logger.info(f"Sent: CUSTOM_TEXT '{custom.text}'")
-                await self._write(client, payload)
-            elif state in (DisplayState.OFF, DisplayState.IN_MEETING,
-                           DisplayState.WFH, DisplayState.OOF):
+
+            elif state == DisplayState.OFF:
                 await self._write(client, [OP_SET_PRESET, int(state)])
-                logger.info(f"Sent: PRESET {state.name}")
+                logger.info("Sent: PRESET OFF")
+
+            elif state in (DisplayState.IN_MEETING, DisplayState.WFH, DisplayState.OOF):
+                # Render preset states as full-screen JPEG with emoji + text
+                preset_payload = _PRESET_CONFIG.get(state)
+                if preset_payload:
+                    emoji, text, bg_r, bg_g, bg_b = preset_payload
+                    fake_custom = CustomPayload(text=text, r=bg_r, g=bg_g, b=bg_b,
+                                                emoji=emoji, fg_r=-1, fg_g=-1, fg_b=-1)
+                    await self._send_screen_image(client, fake_custom)
+                    logger.info(f"Sent: PRESET {state.name} as image")
+                else:
+                    await self._write(client, [OP_SET_PRESET, int(state)])
+                    logger.info(f"Sent: PRESET {state.name}")
+
         except Exception as e:
             logger.error(f"BLE write error: {e} — disconnecting to force reconnect")
             self._connected = False
             await client.disconnect()
+
+    async def _send_screen_image(self, client: BleakClient, custom: CustomPayload):
+        """Render and transfer a full-screen JPEG via IMAGE_START/CHUNK/END."""
+        logger.info(f"Rendering screen: emoji={custom.emoji!r} text={custom.text!r}")
+        jpeg_data = render_screen(
+            emoji=custom.emoji or None,
+            text=custom.text,
+            bg_r=custom.r, bg_g=custom.g, bg_b=custom.b,
+            fg_r=custom.fg_r, fg_g=custom.fg_g, fg_b=custom.fg_b,
+        )
+
+        total = len(jpeg_data)
+        crc = zlib.crc32(jpeg_data) & 0xFFFFFFFF
+        logger.info(f"Sending {total} byte JPEG in chunks...")
+
+        # IMAGE_START: [opcode(1)][total_size(4)][w(2)][h(2)][format(1)]
+        # format 1 = full-screen JPEG
+        from .image_processor import SCREEN_W, SCREEN_H
+        start_payload = struct.pack("<BIHHB", OP_IMAGE_START, total,
+                                    SCREEN_W, SCREEN_H, 1)
+        await self._write(client, start_payload)
+        await asyncio.sleep(0.05)
+
+        # IMAGE_CHUNK: [opcode(1)][chunk_idx(2)][data...]
+        chunk_size = 200  # conservative for write-without-response reliability
+        chunk_idx = 0
+        for offset in range(0, total, chunk_size):
+            chunk = jpeg_data[offset:offset + chunk_size]
+            header = struct.pack("<BH", OP_IMAGE_CHUNK, chunk_idx)
+            await self._write(client, header + chunk)
+            chunk_idx += 1
+            # Small yield to avoid flooding the BLE stack
+            if chunk_idx % 10 == 0:
+                await asyncio.sleep(0.01)
+
+        # IMAGE_END: [opcode(1)][crc32(4)]
+        await asyncio.sleep(0.05)
+        end_payload = struct.pack("<BI", OP_IMAGE_END, crc)
+        await self._write(client, end_payload)
+        logger.info(f"Image transfer complete: {chunk_idx} chunks")
 
     async def _write(self, client: BleakClient, data: list[int] | bytes):
         if self._cmd_char:

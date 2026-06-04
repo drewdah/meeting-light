@@ -86,8 +86,8 @@ def snapshot_to_dict(snap) -> dict:
         "battery_percent": snap.battery_percent,
         "battery_mv": snap.battery_mv,
         "ble_connected": snap.ble_connected,
-        "last_seen": snap.last_seen.strftime("%H:%M:%S") if snap.last_seen else None,
-        "override_expires": snap.override_expires.strftime("%H:%M") if snap.override_expires else None,
+        "last_seen": snap.last_seen.strftime("%I:%M:%S %p").lstrip("0") if snap.last_seen else None,
+        "override_expires": snap.override_expires.strftime("%I:%M %p").lstrip("0") if snap.override_expires else None,
         "authenticated": graph_client.is_authenticated,
         "device_code": graph_client.device_code_info,
     }
@@ -132,10 +132,14 @@ async def set_custom_override(
     r: int = Form(default=255),
     g: int = Form(default=255),
     b: int = Form(default=0),
-    icon_id: int = Form(default=0),
+    emoji: str = Form(default=""),
+    fg_r: int = Form(default=-1),
+    fg_g: int = Form(default=-1),
+    fg_b: int = Form(default=-1),
     duration_minutes: Optional[int] = Form(default=60)
 ):
-    custom = CustomPayload(text=text[:200], r=r, g=g, b=b, icon_id=icon_id)
+    custom = CustomPayload(text=text[:200], r=r, g=g, b=b,
+                           emoji=emoji, fg_r=fg_r, fg_g=fg_g, fg_b=fg_b)
     await state_machine.set_override(DisplayState.CUSTOM_TEXT, custom=custom,
                                      duration_minutes=duration_minutes)
     return {"ok": True}

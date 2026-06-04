@@ -35,10 +35,13 @@ class DisplayState(IntEnum):
 class CustomPayload:
     """Payload for CUSTOM_TEXT state."""
     text: str
-    r: int = 255
+    r: int = 255       # background color
     g: int = 255
     b: int = 255
-    icon_id: int = 0  # 0 = no icon, matches firmware ICONS list
+    emoji: str = ""    # emoji character(s) to render large, "" = none
+    fg_r: int = -1     # text color, -1 = auto
+    fg_g: int = -1
+    fg_b: int = -1
 
 
 @dataclass
