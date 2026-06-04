@@ -4,7 +4,7 @@
 #include <Wire.h>
 #include <esp_sleep.h>
 
-static XPowersPMU pmu;
+static XPowersAXP2101 pmu;
 static bool pmu_ok = false;
 
 void power_init() {
@@ -14,8 +14,12 @@ void power_init() {
         return;
     }
 
+    // Explicitly enable BLDO1 at 3.3V — this powers the AMOLED display
+    // Must be done before display init, pmu.begin() may reset this rail
+    pmu.setBLDO1Voltage(3300);
+    pmu.enableBLDO1();
+
     // Disable unused peripherals for power saving
-    // Keep BLDO1 (AMOLED) enabled, disable audio/mic rails if possible
     pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
     pmu.enableIRQ(XPOWERS_AXP2101_BAT_INSERT_IRQ |
                   XPOWERS_AXP2101_BAT_REMOVE_IRQ |
@@ -74,7 +78,7 @@ void power_enter_deep_sleep() {
     pmu.disableALDO4();
 
     // Configure BOOT button (GPIO 9) as wakeup source
-    esp_sleep_enable_ext1_wakeup(1ULL << BTN_BOOT, ESP_EXT1_WAKEUP_ALL_LOW);
+    esp_sleep_enable_ext1_wakeup(1ULL << BTN_BOOT, ESP_EXT1_WAKEUP_ANY_LOW);
 
     // Safety timer: wake after 8 hours regardless
     esp_sleep_enable_timer_wakeup(8ULL * 3600 * 1000000);

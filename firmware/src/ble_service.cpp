@@ -214,7 +214,7 @@ void ble_init() {
     );
     pInfoChar->setValue("{\"fw\":\"0.1.0\",\"hw\":\"waveshare-c6-amoled-1.8\"}");
 
-    pService->start();
+    // Note: pService->start() is deprecated in NimBLE-Arduino 2.x — server start handles it
 
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(BLE_SERVICE_UUID);

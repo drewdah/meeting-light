@@ -1,35 +1,31 @@
 #include "display.h"
 #include "config.h"
 #include <Arduino_GFX_Library.h>
+#include <Adafruit_XCA9554.h>
 #include <Wire.h>
 
+// RGB565 color constants
+#define BLACK   0x0000
+#define WHITE   0xFFFF
+#define RED     0xF800
+#define GREEN   0x07E0
+#define BLUE    0x001F
+
 static Arduino_DataBus* bus = nullptr;
-static Arduino_GFX* gfx = nullptr;
+static Arduino_SH8601* gfx = nullptr;
+static Adafruit_XCA9554 expander;
 static bool screen_on = false;
 
-// TCA9554 register addresses
-#define TCA9554_REG_OUTPUT    0x01
-#define TCA9554_REG_CONFIG    0x03
-
-static void tca9554_write_reg(uint8_t reg, uint8_t val) {
-    Wire.beginTransmission(ADDR_TCA9554);
-    Wire.write(reg);
-    Wire.write(val);
-    Wire.endTransmission();
-}
-
 static void expander_init() {
-    // Configure P4 and P5 as outputs (0 = output in TCA9554 config register)
-    // Bits 4 and 5 cleared = output, others input (don't care)
-    tca9554_write_reg(TCA9554_REG_CONFIG, 0b11001111);
-
-    // Pull P4 and P5 LOW for 200ms (power-cycle the display/touch)
-    tca9554_write_reg(TCA9554_REG_OUTPUT, 0b00000000);
-    delay(200);
-
-    // Pull P4 and P5 HIGH to enable display and touch
-    tca9554_write_reg(TCA9554_REG_OUTPUT, 0b00110000);
-    delay(100);
+    if (!expander.begin(ADDR_TCA9554)) {
+        Serial.println("XCA9554 expander not found!");
+        return;
+    }
+    expander.pinMode(4, OUTPUT);
+    expander.pinMode(5, OUTPUT);
+    expander.digitalWrite(4, 1);
+    expander.digitalWrite(5, 1);
+    delay(500);
 }
 
 void display_init() {
@@ -41,9 +37,11 @@ void display_init() {
     );
 
     gfx = new Arduino_SH8601(bus, GFX_NOT_DEFINED, 0 /* rotation */,
-                              false /* IPS */, LCD_WIDTH, LCD_HEIGHT);
+                              (uint16_t)LCD_WIDTH, (uint16_t)LCD_HEIGHT);
 
-    gfx->begin(LCD_QSPI_FREQ);
+    if (!gfx->begin()) {
+        Serial.println("SH8601 display init failed!");
+    }
     gfx->fillScreen(BLACK);
     gfx->setTextWrap(true);
 
@@ -155,6 +153,7 @@ void display_show_image(const uint8_t* jpeg_data, size_t jpeg_len) {
 
 void display_set_brightness(uint8_t level) {
     if (!gfx) return;
+    // SH8601 brightness via Arduino_SH8601::setBrightness (available on this class)
     gfx->setBrightness(level);
 }
 
