@@ -15,6 +15,7 @@ venv/
 
 # Service runtime data
 service/data/
+service/.env
 
 # Editor
 .vscode/

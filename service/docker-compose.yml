@@ -1,0 +1,18 @@
+services:
+  meeting-light:
+    build: .
+    network_mode: host          # required for BLE access via BlueZ
+    privileged: true            # required for /dev/bus/bluetooth
+    volumes:
+      - ./data:/app/data        # persistent token cache and DB
+      - /var/run/dbus:/var/run/dbus  # D-Bus for BlueZ
+    env_file:
+      - .env
+    environment:
+      - TZ=America/New_York
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
