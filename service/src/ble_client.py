@@ -165,20 +165,8 @@ class BLEClient:
                 logger.info("Sent: SLEEP")
 
             elif state == DisplayState.CUSTOM_TEXT and custom:
-                if custom.emoji:
-                    # Render full screen JPEG and transfer via image protocol
-                    await self._send_screen_image(client, custom)
-                else:
-                    text_bytes = custom.text.encode("utf-8")[:200]
-                    # Include fg color: [OP][r][g][b][fg_r][fg_g][fg_b][text]
-                    # Use auto fg (255,255,255) if not set
-                    fg_r = custom.fg_r if custom.fg_r >= 0 else 255
-                    fg_g = custom.fg_g if custom.fg_g >= 0 else 255
-                    fg_b = custom.fg_b if custom.fg_b >= 0 else 255
-                    payload = bytes([OP_SET_CUSTOM_TEXT, custom.r, custom.g, custom.b,
-                                     fg_r, fg_g, fg_b]) + text_bytes
-                    await self._write(client, payload)
-                    logger.info(f"Sent: CUSTOM_TEXT '{custom.text}'")
+                # Always use image path for consistent rendering (emoji or text-only)
+                await self._send_screen_image(client, custom)
 
             elif state == DisplayState.OFF:
                 await self._write(client, [OP_SET_PRESET, int(state)])
@@ -209,6 +197,7 @@ class BLEClient:
             text=custom.text,
             bg_r=custom.r, bg_g=custom.g, bg_b=custom.b,
             fg_r=custom.fg_r, fg_g=custom.fg_g, fg_b=custom.fg_b,
+            font_size_override=custom.font_size,
         )
 
         total = len(jpeg_data)

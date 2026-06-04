@@ -286,6 +286,12 @@
              style="width: 184px; height: 224px; object-fit: cover;">
       </div>
       <div id="preview-loading" class="text-center text-gray-400 text-sm hidden">Rendering...</div>
+      <!-- Font size controls -->
+      <div class="flex items-center justify-center gap-3">
+        <button onclick="adjustFontSize(-4)" class="bg-gray-600 hover:bg-gray-500 text-white w-8 h-8 rounded text-lg font-bold">−</button>
+        <span class="text-sm text-gray-400">Font: <span id="font-size-label">auto</span></span>
+        <button onclick="adjustFontSize(+4)" class="bg-gray-600 hover:bg-gray-500 text-white w-8 h-8 rounded text-lg font-bold">+</button>
+      </div>
       <div class="flex gap-3">
         <button onclick="closePreview()" class="flex-1 bg-gray-600 hover:bg-gray-500 text-white py-2 rounded text-sm">
           Cancel
@@ -336,6 +342,29 @@
       document.getElementById('fg-color').disabled = document.getElementById('fg-auto').checked;
     }
 
+    let previewFontSize = 0;  // 0 = auto
+
+    function adjustFontSize(delta) {
+      if (previewFontSize === 0) previewFontSize = 48;  // start from a sensible default
+      previewFontSize = Math.max(24, previewFontSize + delta);
+      document.getElementById('font-size-label').textContent = previewFontSize + 'px';
+      refreshPreview();
+    }
+
+    async function refreshPreview() {
+      const img = document.getElementById('preview-img');
+      const loading = document.getElementById('preview-loading');
+      img.classList.add('hidden');
+      loading.classList.remove('hidden');
+      const fd = buildCustomFormData();
+      fd.set('font_size', previewFontSize);
+      const resp = await fetch('/api/preview', { method: 'POST', body: fd });
+      const data = await resp.json();
+      img.src = data.image;
+      img.classList.remove('hidden');
+      loading.classList.add('hidden');
+    }
+
     function buildCustomFormData() {
       const text = document.getElementById('custom-text').value.trim();
       const bg = document.getElementById('custom-color').value;
@@ -361,18 +390,10 @@
     async function previewCustom() {
       const text = document.getElementById('custom-text').value.trim();
       if (!text && !selectedEmoji) return;
-      const modal = document.getElementById('preview-modal');
-      const img = document.getElementById('preview-img');
-      const loading = document.getElementById('preview-loading');
-      img.classList.add('hidden');
-      loading.classList.remove('hidden');
-      modal.classList.remove('hidden');
-      const fd = buildCustomFormData();
-      const resp = await fetch('/api/preview', { method: 'POST', body: fd });
-      const data = await resp.json();
-      img.src = data.image;
-      img.classList.remove('hidden');
-      loading.classList.add('hidden');
+      previewFontSize = 0;  // reset to auto each time
+      document.getElementById('font-size-label').textContent = 'auto';
+      document.getElementById('preview-modal').classList.remove('hidden');
+      await refreshPreview();
     }
 
     function closePreview() {
@@ -382,6 +403,7 @@
     async function sendCustom() {
       closePreview();
       const fd = buildCustomFormData();
+      fd.append('font_size', previewFontSize);
       const dur = getDuration();
       if (dur) fd.append('duration_minutes', dur);
       await fetch('/api/override/custom', { method: 'POST', body: fd });

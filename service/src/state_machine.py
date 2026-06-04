@@ -42,6 +42,7 @@ class CustomPayload:
     fg_r: int = -1     # text color, -1 = auto
     fg_g: int = -1
     fg_b: int = -1
+    font_size: int = 0  # 0 = auto
 
 
 @dataclass

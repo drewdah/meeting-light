@@ -140,14 +140,16 @@ async def preview_custom(
     fg_r: int = Form(default=-1),
     fg_g: int = Form(default=-1),
     fg_b: int = Form(default=-1),
+    font_size: int = Form(default=0),
 ):
     """Render the image and return it as base64 JPEG for preview — no BLE send."""
     jpeg_data = render_screen(
         emoji=emoji or None, text=text,
         bg_r=r, bg_g=g, bg_b=b, fg_r=fg_r, fg_g=fg_g, fg_b=fg_b,
+        font_size_override=font_size,
     )
     b64 = base64.b64encode(jpeg_data).decode()
-    return {"image": f"data:image/jpeg;base64,{b64}"}
+    return {"image": f"data:image/jpeg;base64,{b64}", "font_size": font_size}
 
 
 @app.post("/api/override/custom")
@@ -160,10 +162,12 @@ async def set_custom_override(
     fg_r: int = Form(default=-1),
     fg_g: int = Form(default=-1),
     fg_b: int = Form(default=-1),
+    font_size: int = Form(default=0),
     duration_minutes: Optional[int] = Form(default=60)
 ):
     custom = CustomPayload(text=text[:200], r=r, g=g, b=b,
-                           emoji=emoji, fg_r=fg_r, fg_g=fg_g, fg_b=fg_b)
+                           emoji=emoji, fg_r=fg_r, fg_g=fg_g, fg_b=fg_b,
+                           font_size=font_size)
     await state_machine.set_override(DisplayState.CUSTOM_TEXT, custom=custom,
                                      duration_minutes=duration_minutes)
     return {"ok": True}

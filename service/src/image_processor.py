@@ -49,6 +49,7 @@ def render_screen(
     text: str,
     bg_r: int, bg_g: int, bg_b: int,
     fg_r: int = -1, fg_g: int = -1, fg_b: int = -1,  # -1 = auto
+    font_size_override: int = 0,  # 0 = auto
 ) -> bytes:
     """
     Render a full 368x448 JPEG screen image.
@@ -71,7 +72,8 @@ def render_screen(
     draw = ImageDraw.Draw(img)
 
     if emoji or text.strip():
-        _draw_centered_group(img, draw, emoji or None, text, fg, bg)
+        _draw_centered_group(img, draw, emoji or None, text, fg, bg,
+                             font_size_override=font_size_override)
 
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=JPEG_QUALITY, optimize=True)
@@ -81,12 +83,14 @@ def render_screen(
 
 
 def _draw_centered_group(img: Image.Image, draw: ImageDraw.Draw,
-                          emoji: Optional[str], text: str, fg: tuple, bg: tuple):
+                          emoji: Optional[str], text: str, fg: tuple, bg: tuple,
+                          font_size_override: int = 0):
     """
     Render emoji + text as a vertically centered group on the screen.
     Measures each element, stacks them with a gap, and centers the whole block.
     """
-    EMOJI_SIZE = int(SCREEN_H * 0.38)   # ~170px
+    EMOJI_SIZE = int(SCREEN_H * 0.38)    # ~170px font size
+    EMOJI_PAD  = int(SCREEN_H * 0.025)  # ~11px extra canvas above/below emoji
     GAP = int(SCREEN_H * 0.06)          # ~27px between emoji and text
     PADDING = int(SCREEN_H * 0.04)      # ~18px top/bottom padding
 
@@ -122,39 +126,54 @@ def _draw_centered_group(img: Image.Image, draw: ImageDraw.Draw,
         return result
 
     MAX_TEXT_W = SCREEN_W - 32
+    # Available height for the text block (screen minus emoji, gap, padding)
+    emoji_h_budget = EMOJI_SIZE if emoji else 0
+    gap_budget = GAP if (emoji and raw_lines) else 0
+    max_text_h = SCREEN_H - emoji_h_budget - gap_budget - 2 * PADDING
+
     if raw_lines:
-        while text_size >= MIN_FONT:
+        if font_size_override > 0:
+            # Use the requested size directly, just wrap to fit width
+            text_size = max(MIN_FONT, font_size_override)
             f = _load_font(TEXT_FONT_CANDIDATES, text_size)
             if f:
-                wrapped = wrap_lines(f, raw_lines, MAX_TEXT_W)
-                # Check all wrapped lines fit width
-                fits = all(
-                    draw.textbbox((0, 0), l, font=f)[2] <= MAX_TEXT_W
-                    for l in wrapped
-                )
-                if fits:
-                    text_font = f
-                    lines = wrapped
-                    break
-            text_size -= 4
-        if not text_font:
-            # Fallback: use min size with wrapping
-            text_font = _load_font(TEXT_FONT_CANDIDATES, MIN_FONT)
-            if text_font:
-                lines = wrap_lines(text_font, raw_lines, MAX_TEXT_W)
+                text_font = f
+                lines = wrap_lines(f, raw_lines, MAX_TEXT_W)
             else:
                 lines = raw_lines
+        else:
+            while text_size >= MIN_FONT:
+                f = _load_font(TEXT_FONT_CANDIDATES, text_size)
+                if f:
+                    wrapped = wrap_lines(f, raw_lines, MAX_TEXT_W)
+                    lh = int(text_size * 1.3)
+                    ls = int(text_size * 0.2)
+                    tbh = len(wrapped) * lh + max(0, len(wrapped) - 1) * ls
+                    width_ok = all(
+                        draw.textbbox((0, 0), l, font=f)[2] - draw.textbbox((0, 0), l, font=f)[0] <= MAX_TEXT_W
+                        for l in wrapped if l
+                    )
+                    if width_ok and tbh <= max_text_h:
+                        text_font = f
+                        lines = wrapped
+                        break
+                text_size -= 4
+            if not text_font:
+                text_font = _load_font(TEXT_FONT_CANDIDATES, MIN_FONT)
+                if text_font:
+                    lines = wrap_lines(text_font, raw_lines, MAX_TEXT_W)
+                else:
+                    lines = raw_lines
 
     line_bboxes = []
-    line_h = 0
+    line_h = int(text_size * 1.3) if text_font else 0
+    line_spacing = int(text_size * 0.2) if text_font else 0
     if text_font and lines:
         line_bboxes = [draw.textbbox((0, 0), l, font=text_font) for l in lines]
-        line_h = max((b[3] - b[1]) for b in line_bboxes)
-    line_spacing = int(line_h * 0.15)
     text_block_h = len(lines) * line_h + max(0, len(lines)-1) * line_spacing if lines else 0
 
     # --- Calculate total group height ---
-    emoji_block_h = EMOJI_SIZE if emoji else 0
+    emoji_block_h = (EMOJI_SIZE + EMOJI_PAD * 2) if emoji else 0
     gap = GAP if (emoji and lines) else 0
     total_h = emoji_block_h + gap + text_block_h
 
@@ -166,7 +185,7 @@ def _draw_centered_group(img: Image.Image, draw: ImageDraw.Draw,
         font = _load_font(EMOJI_FONT_CANDIDATES, EMOJI_SIZE)
         if font:
             try:
-                canvas = Image.new("RGBA", (SCREEN_W, emoji_block_h), (0, 0, 0, 0))
+                canvas = Image.new("RGBA", (SCREEN_W, emoji_block_h), (0, 0, 0, 0))  # includes EMOJI_PAD
                 cdraw = ImageDraw.Draw(canvas)
                 # Try measuring with and without variation selectors
                 # Some multi-codepoint emoji (e.g. ✈️) return unusual bboxes
@@ -179,9 +198,9 @@ def _draw_centered_group(img: Image.Image, draw: ImageDraw.Draw,
                     bbox = cdraw.textbbox((0, 0), clean, font=font)
                     ew, eh = bbox[2] - bbox[0], bbox[3] - bbox[1]
 
-                # Clamp to canvas bounds
+                # Center emoji within canvas, with EMOJI_PAD headroom at top
                 x = max(0, min(SCREEN_W - ew, (SCREEN_W - ew) // 2 - bbox[0]))
-                y = max(0, (emoji_block_h - eh) // 2 - bbox[1])
+                y = EMOJI_PAD + max(0, (EMOJI_SIZE - eh) // 2 - bbox[1])
                 cdraw.text((x, y), emoji, font=font, embedded_color=True)
                 bg_layer = Image.new("RGBA", (SCREEN_W, emoji_block_h), (*bg, 255))
                 composited = Image.alpha_composite(bg_layer, canvas)
@@ -189,13 +208,15 @@ def _draw_centered_group(img: Image.Image, draw: ImageDraw.Draw,
             except Exception as e:
                 logger.warning(f"Emoji draw failed: {e}")
 
-    # --- Draw text ---
+    # --- Draw text with consistent line height ---
     if text_font and lines:
         y = top + emoji_block_h + gap
         for line, bbox in zip(lines, line_bboxes):
             lw = bbox[2] - bbox[0]
-            x = (SCREEN_W - lw) // 2 - bbox[0]
-            draw.text((x, y), line, font=text_font, fill=fg)
+            x = max(0, (SCREEN_W - lw) // 2 - bbox[0])
+            # Vertically center text within the line_h slot
+            y_offset = max(0, (line_h - (bbox[3] - bbox[1])) // 2 - bbox[1])
+            draw.text((x, y + y_offset), line, font=text_font, fill=fg)
             y += line_h + line_spacing
 
 
