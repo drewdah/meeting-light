@@ -6,6 +6,7 @@
   <title>Meeting Light</title>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
   <style>
     .state-red    { background: #dc2626; }
     .state-blue   { background: #2563eb; }
@@ -148,40 +149,25 @@
             <label class="text-sm text-gray-400">Background:</label>
             <input id="custom-color" type="color" value="#1d4ed8" class="h-8 w-16 rounded cursor-pointer">
           </div>
-          <!-- Emoji icon picker — quick presets -->
+          <!-- Emoji picker -->
           <div>
-            <label class="text-sm text-gray-400 block mb-2">Icon (optional) — or type any emoji above:</label>
-            <div class="flex flex-wrap gap-2 mb-2">
-              <button type="button" onclick="selectEmoji('', this)"
-                class="emoji-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-sm border-2 border-indigo-500"
-                title="No icon">✖</button>
-              <button type="button" onclick="selectEmoji('🔴', this)"
-                class="emoji-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent">🔴</button>
-              <button type="button" onclick="selectEmoji('🏠', this)"
-                class="emoji-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent">🏠</button>
-              <button type="button" onclick="selectEmoji('✈️', this)"
-                class="emoji-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent">✈️</button>
-              <button type="button" onclick="selectEmoji('🍕', this)"
-                class="emoji-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent">🍕</button>
-              <button type="button" onclick="selectEmoji('🎧', this)"
-                class="emoji-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent">🎧</button>
-              <button type="button" onclick="selectEmoji('⏰', this)"
-                class="emoji-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent">⏰</button>
-              <button type="button" onclick="selectEmoji('🚫', this)"
-                class="emoji-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent">🚫</button>
-              <button type="button" onclick="selectEmoji('💻', this)"
-                class="emoji-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent">💻</button>
-              <button type="button" onclick="selectEmoji('📞', this)"
-                class="emoji-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent">📞</button>
-              <button type="button" onclick="selectEmoji('☕', this)"
-                class="emoji-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent">☕</button>
-              <button type="button" onclick="selectEmoji('🏋️', this)"
-                class="emoji-btn w-10 h-10 rounded bg-gray-600 hover:bg-gray-500 text-lg border-2 border-transparent">🏋️</button>
+            <label class="text-sm text-gray-400 block mb-2">Icon (optional)</label>
+            <div class="flex items-center gap-3">
+              <button type="button" onclick="toggleEmojiPicker()"
+                id="emoji-pick-btn"
+                class="h-10 px-3 rounded bg-gray-600 hover:bg-gray-500 text-sm border-2 border-transparent flex items-center gap-2">
+                <span id="emoji-pick-label" class="text-xl">＋</span>
+                <span class="text-gray-300 text-xs">Pick emoji</span>
+              </button>
+              <button type="button" onclick="clearEmoji()"
+                class="h-10 px-3 rounded bg-gray-600 hover:bg-gray-500 text-gray-400 text-sm">
+                ✖ None
+              </button>
             </div>
-            <!-- Custom emoji text input -->
-            <input id="custom-emoji" type="text" placeholder="Or paste any emoji here..."
-                   class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm"
-                   oninput="customEmojiTyped()">
+            <!-- Picker dropdown -->
+            <div id="emoji-picker-container" class="hidden mt-2" style="max-height:320px; overflow:hidden;">
+              <emoji-picker id="the-picker" class="dark"></emoji-picker>
+            </div>
           </div>
           <div class="flex items-center gap-3">
             <label class="text-sm text-gray-400">Text color:</label>
@@ -321,23 +307,37 @@
     }
 
     let selectedEmoji = '';
-    function selectEmoji(emoji, btn) {
+    let pickerReady = false;
+
+    function toggleEmojiPicker() {
+      const container = document.getElementById('emoji-picker-container');
+      container.classList.toggle('hidden');
+      if (!pickerReady) {
+        pickerReady = true;
+        document.getElementById('the-picker').addEventListener('emoji-click', e => {
+          setEmoji(e.detail.unicode);
+          container.classList.add('hidden');
+        });
+      }
+    }
+
+    function setEmoji(emoji) {
       selectedEmoji = emoji;
-      document.getElementById('custom-emoji').value = '';
-      document.querySelectorAll('.emoji-btn').forEach(b => {
-        b.classList.remove('border-indigo-500');
-        b.classList.add('border-transparent');
-      });
+      const btn = document.getElementById('emoji-pick-btn');
+      document.getElementById('emoji-pick-label').textContent = emoji;
       btn.classList.add('border-indigo-500');
       btn.classList.remove('border-transparent');
     }
-    function customEmojiTyped() {
-      selectedEmoji = document.getElementById('custom-emoji').value;
-      document.querySelectorAll('.emoji-btn').forEach(b => {
-        b.classList.remove('border-indigo-500');
-        b.classList.add('border-transparent');
-      });
+
+    function clearEmoji() {
+      selectedEmoji = '';
+      document.getElementById('emoji-pick-label').textContent = '＋';
+      const btn = document.getElementById('emoji-pick-btn');
+      btn.classList.remove('border-indigo-500');
+      btn.classList.add('border-transparent');
+      document.getElementById('emoji-picker-container').classList.add('hidden');
     }
+
     function toggleFgAuto() {
       document.getElementById('fg-color').disabled = document.getElementById('fg-auto').checked;
     }
