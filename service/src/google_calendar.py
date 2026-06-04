@@ -16,6 +16,7 @@ import aiohttp
 
 from .calendar_base import CalendarProvider
 from .config import settings
+from . import settings_store
 from .state_machine import DisplayState
 
 logger = logging.getLogger(__name__)
@@ -62,10 +63,16 @@ class GoogleCalendarProvider(CalendarProvider):
 
     # ── Auth flow ─────────────────────────────────────────────────────────────
 
+    def _client_id(self):
+        return settings_store.get("google_client_id", settings.google_client_id)
+
+    def _client_secret(self):
+        return settings_store.get("google_client_secret", settings.google_client_secret)
+
     async def start_auth_flow(self) -> dict:
         async with aiohttp.ClientSession() as s:
             resp = await s.post(DEVICE_AUTH_URL, data={
-                "client_id": settings.google_client_id,
+                "client_id": self._client_id(),
                 "scope": SCOPES,
             })
             data = await resp.json()
@@ -86,8 +93,8 @@ class GoogleCalendarProvider(CalendarProvider):
         device_code = self._device_code_info.get("device_code")
         async with aiohttp.ClientSession() as s:
             resp = await s.post(TOKEN_URL, data={
-                "client_id": settings.google_client_id,
-                "client_secret": settings.google_client_secret,
+                "client_id": self._client_id(),
+                "client_secret": self._client_secret(),
                 "device_code": device_code,
                 "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
             })
@@ -114,8 +121,8 @@ class GoogleCalendarProvider(CalendarProvider):
         try:
             async with aiohttp.ClientSession() as s:
                 resp = await s.post(TOKEN_URL, data={
-                    "client_id": settings.google_client_id,
-                    "client_secret": settings.google_client_secret,
+                    "client_id": self._client_id(),
+                    "client_secret": self._client_secret(),
                     "refresh_token": self._refresh_token,
                     "grant_type": "refresh_token",
                 })

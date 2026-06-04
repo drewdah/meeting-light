@@ -213,46 +213,119 @@
     <details class="bg-gray-800 rounded-xl p-6">
       <summary class="cursor-pointer font-semibold hover:text-white text-gray-300">⚙️ Settings</summary>
       <form id="settings-form" class="mt-4 space-y-4" onsubmit="saveSettings(event)">
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="text-sm text-gray-400 block mb-1">Business Hours Start</label>
-            <input type="number" name="business_hours_start" min="0" max="23"
-                   value="{{ settings.business_hours_start }}"
-                   class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
+
+        <!-- Calendar -->
+        <div class="border-b border-gray-700 pb-4">
+          <h3 class="text-sm font-medium text-gray-300 mb-3">📅 Calendar</h3>
+          <div class="space-y-3">
+            <div>
+              <label class="text-sm text-gray-400 block mb-1">Provider</label>
+              <select name="calendar_provider" id="calendar-provider-select"
+                      onchange="updateCalendarFields()"
+                      class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
+                <option value="microsoft" {{ 'selected' if settings.calendar_provider == 'microsoft' }}>Microsoft 365 / Outlook</option>
+                <option value="google" {{ 'selected' if settings.calendar_provider == 'google' }}>Google Calendar</option>
+              </select>
+            </div>
+
+            <!-- Google-only fields -->
+            <div id="google-fields" class="{{ '' if settings.calendar_provider == 'google' else 'hidden' }} space-y-3">
+              <div>
+                <label class="text-sm text-gray-400 block mb-1">Google Client ID</label>
+                <input type="text" name="google_client_id"
+                       value="{{ settings.google_client_id }}"
+                       placeholder="xxxxxx.apps.googleusercontent.com"
+                       class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm font-mono">
+              </div>
+              <div>
+                <label class="text-sm text-gray-400 block mb-1">Google Client Secret</label>
+                <input type="password" name="google_client_secret"
+                       value="{{ settings.google_client_secret }}"
+                       placeholder="GOCSPX-..."
+                       class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm font-mono">
+              </div>
+            </div>
+
+            <!-- Auth status + sign-in -->
+            <div class="bg-gray-700 rounded-lg p-3 flex items-center justify-between">
+              <div>
+                <div class="text-sm font-medium {{ 'text-green-400' if snap.authenticated else 'text-yellow-400' }}">
+                  {{ '✓ Signed in' if snap.authenticated else '⚠ Not signed in' }}
+                </div>
+                <div class="text-xs text-gray-400 mt-0.5">
+                  Calendar detection {{ 'active' if snap.authenticated else 'inactive — sign in to enable' }}
+                </div>
+              </div>
+              <button type="button" onclick="startCalendarAuth()"
+                class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-sm">
+                {{ 'Re-authenticate' if snap.authenticated else 'Sign in' }}
+              </button>
+            </div>
+
+            <!-- Device code display -->
+            <div id="device-code-box" class="hidden bg-gray-900 rounded-lg p-3 space-y-2">
+              <div class="text-xs text-gray-400">Visit <strong id="dc-url" class="text-white"></strong> and enter:</div>
+              <div id="dc-code" class="text-2xl font-bold font-mono tracking-widest text-center text-white"></div>
+              <button type="button" onclick="pollCalendarAuth()"
+                class="w-full bg-green-700 hover:bg-green-600 text-white py-1.5 rounded text-sm">
+                I've entered the code ✓
+              </button>
+            </div>
           </div>
-          <div>
-            <label class="text-sm text-gray-400 block mb-1">Business Hours End</label>
-            <input type="number" name="business_hours_end" min="1" max="24"
-                   value="{{ settings.business_hours_end }}"
+        </div>
+
+        <!-- Schedule -->
+        <div class="border-b border-gray-700 pb-4">
+          <h3 class="text-sm font-medium text-gray-300 mb-3">🕐 Schedule</h3>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="text-sm text-gray-400 block mb-1">Business Hours Start</label>
+              <input type="number" name="business_hours_start" min="0" max="23"
+                     value="{{ settings.business_hours_start }}"
+                     class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
+            </div>
+            <div>
+              <label class="text-sm text-gray-400 block mb-1">Business Hours End</label>
+              <input type="number" name="business_hours_end" min="1" max="24"
+                     value="{{ settings.business_hours_end }}"
+                     class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
+            </div>
+          </div>
+          <div class="mt-3">
+            <label class="text-sm text-gray-400 block mb-1">Timezone</label>
+            <input type="text" name="timezone" value="{{ settings.timezone }}"
+                   placeholder="America/New_York"
                    class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
           </div>
         </div>
+
+        <!-- Device -->
         <div>
-          <label class="text-sm text-gray-400 block mb-1">Timezone</label>
-          <input type="text" name="timezone" value="{{ settings.timezone }}"
-                 placeholder="America/New_York"
-                 class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
-        </div>
-        <div>
-          <label class="text-sm text-gray-400 block mb-1">ESP32 MAC Address</label>
-          <input type="text" name="esp32_mac_address" value="{{ settings.esp32_mac_address }}"
-                 placeholder="AA:BB:CC:DD:EE:FF"
-                 class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm font-mono">
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="text-sm text-gray-400 block mb-1">Poll Interval (seconds)</label>
-            <input type="number" name="graph_poll_interval_seconds" min="30" max="300"
-                   value="{{ settings.graph_poll_interval_seconds }}"
-                   class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
+          <h3 class="text-sm font-medium text-gray-300 mb-3">📡 Device</h3>
+          <div class="space-y-3">
+            <div>
+              <label class="text-sm text-gray-400 block mb-1">ESP32 MAC Address</label>
+              <input type="text" name="esp32_mac_address" value="{{ settings.esp32_mac_address }}"
+                     placeholder="AA:BB:CC:DD:EE:FF"
+                     class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm font-mono">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="text-sm text-gray-400 block mb-1">Poll Interval (seconds)</label>
+                <input type="number" name="graph_poll_interval_seconds" min="30" max="300"
+                       value="{{ settings.graph_poll_interval_seconds }}"
+                       class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
+              </div>
+              <div>
+                <label class="text-sm text-gray-400 block mb-1">Brightness (0-255)</label>
+                <input type="number" name="default_brightness" min="0" max="255"
+                       value="{{ settings.default_brightness }}"
+                       class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
+              </div>
+            </div>
           </div>
-          <div>
-            <label class="text-sm text-gray-400 block mb-1">Brightness (0-255)</label>
-            <input type="number" name="default_brightness" min="0" max="255"
-                   value="{{ settings.default_brightness }}"
-                   class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
-          </div>
         </div>
+
         <div class="flex items-center gap-3">
           <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded text-sm">
             Save Settings
@@ -482,17 +555,39 @@
       refreshStatus();
     }
 
-    async function startAuth() {
-      const resp = await fetch('/api/auth/start', { method: 'POST' });
-      location.reload();
+    function updateCalendarFields() {
+      const provider = document.getElementById('calendar-provider-select').value;
+      document.getElementById('google-fields').classList.toggle('hidden', provider !== 'google');
     }
 
-    async function pollAuth() {
+    async function startCalendarAuth() {
+      // Save settings first so credentials are available
+      const fd = new FormData(document.getElementById('settings-form'));
+      await fetch('/api/settings', { method: 'POST', body: fd });
+
+      const resp = await fetch('/api/auth/start', { method: 'POST' });
+      const data = await resp.json();
+      if (data.user_code) {
+        document.getElementById('dc-url').textContent = data.verification_uri;
+        document.getElementById('dc-code').textContent = data.user_code;
+        document.getElementById('device-code-box').classList.remove('hidden');
+      }
+    }
+
+    async function pollCalendarAuth() {
       const resp = await fetch('/api/auth/poll', { method: 'POST' });
       const data = await resp.json();
-      if (data.authenticated) location.reload();
-      else alert('Not authenticated yet — try again in a moment.');
+      if (data.authenticated) {
+        document.getElementById('device-code-box').classList.add('hidden');
+        location.reload();
+      } else {
+        alert('Not authenticated yet — wait a moment and try again.');
+      }
     }
+
+    // Keep old names for backward compatibility with auth banner
+    async function startAuth() { await startCalendarAuth(); }
+    async function pollAuth() { await pollCalendarAuth(); }
 
     async function refreshStatus() {
       const resp = await fetch('/api/status');

@@ -227,6 +227,9 @@ async def update_settings(
     esp32_mac_address: str = Form(...),
     graph_poll_interval_seconds: int = Form(...),
     default_brightness: int = Form(...),
+    calendar_provider: str = Form(default="microsoft"),
+    google_client_id: str = Form(default=""),
+    google_client_secret: str = Form(default=""),
 ):
     settings_store.update({
         "business_hours_start": business_hours_start,
@@ -235,6 +238,9 @@ async def update_settings(
         "esp32_mac_address": esp32_mac_address,
         "graph_poll_interval_seconds": graph_poll_interval_seconds,
         "default_brightness": default_brightness,
+        "calendar_provider": calendar_provider,
+        "google_client_id": google_client_id,
+        "google_client_secret": google_client_secret,
     })
     # Trigger state machine tick to re-evaluate business hours
     await state_machine.tick()

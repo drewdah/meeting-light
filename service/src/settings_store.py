@@ -22,6 +22,9 @@ EDITABLE_KEYS = {
     "esp32_mac_address",
     "graph_poll_interval_seconds",
     "default_brightness",
+    "calendar_provider",
+    "google_client_id",
+    "google_client_secret",
 }
 
 _overrides: dict[str, Any] = {}
@@ -71,6 +74,9 @@ def all_settings() -> dict:
         "esp32_mac_address": get("esp32_mac_address"),
         "graph_poll_interval_seconds": get("graph_poll_interval_seconds"),
         "default_brightness": get("default_brightness"),
+        "calendar_provider": get("calendar_provider", "microsoft"),
+        "google_client_id": get("google_client_id", ""),
+        "google_client_secret": get("google_client_secret", ""),
     }
 
 
