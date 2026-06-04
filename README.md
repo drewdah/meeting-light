@@ -1,5 +1,10 @@
 # Meeting Light
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/drewdah/meeting-light/main/assets/screenshot-1.png" width="45%" alt="Meeting Light in use" />
+  <img src="https://raw.githubusercontent.com/drewdah/meeting-light/main/assets/screenshot-2.jpg" width="45%" alt="Meeting Light web UI" />
+</p>
+
 A professional office status display for a Waveshare ESP32-C6 1.8" Touch AMOLED, mounted in an office window. Shows your current status — In a Meeting, Working From Home, Out of Office, or a custom message — to coworkers passing by.
 
 ## How It Works
