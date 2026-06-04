@@ -180,22 +180,12 @@ class BLEClient:
                     await self._write(client, payload)
                     logger.info(f"Sent: CUSTOM_TEXT '{custom.text}'")
 
-            elif state == DisplayState.OFF:
+            elif state in (DisplayState.OFF, DisplayState.IN_MEETING,
+                           DisplayState.WFH, DisplayState.OOF):
+                # Use simple preset command — image-based presets require
+                # JPEG firmware fix (pending flash when USB driver is resolved)
                 await self._write(client, [OP_SET_PRESET, int(state)])
-                logger.info("Sent: PRESET OFF")
-
-            elif state in (DisplayState.IN_MEETING, DisplayState.WFH, DisplayState.OOF):
-                # Render preset states as full-screen JPEG with emoji + text
-                preset_payload = _PRESET_CONFIG.get(state)
-                if preset_payload:
-                    emoji, text, bg_r, bg_g, bg_b = preset_payload
-                    fake_custom = CustomPayload(text=text, r=bg_r, g=bg_g, b=bg_b,
-                                                emoji=emoji, fg_r=-1, fg_g=-1, fg_b=-1)
-                    await self._send_screen_image(client, fake_custom)
-                    logger.info(f"Sent: PRESET {state.name} as image")
-                else:
-                    await self._write(client, [OP_SET_PRESET, int(state)])
-                    logger.info(f"Sent: PRESET {state.name}")
+                logger.info(f"Sent: PRESET {state.name}")
 
         except Exception as e:
             logger.error(f"BLE write error: {e} — disconnecting to force reconnect")
