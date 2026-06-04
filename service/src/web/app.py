@@ -3,6 +3,7 @@ FastAPI web application — dashboard, overrides, and API.
 """
 
 import asyncio
+import base64
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -21,6 +22,7 @@ from ..ble_client import ble_client
 from ..scheduler import graph_poll_loop, tick_loop
 from .. import settings_store
 from .. import log_buffer
+from ..image_processor import render_screen
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +128,26 @@ async def set_preset_override(
     else:
         await state_machine.set_override(ds, duration_minutes=duration_minutes)
     return {"ok": True}
+
+
+@app.post("/api/preview")
+async def preview_custom(
+    text: str = Form(default=""),
+    r: int = Form(default=255),
+    g: int = Form(default=255),
+    b: int = Form(default=0),
+    emoji: str = Form(default=""),
+    fg_r: int = Form(default=-1),
+    fg_g: int = Form(default=-1),
+    fg_b: int = Form(default=-1),
+):
+    """Render the image and return it as base64 JPEG for preview — no BLE send."""
+    jpeg_data = render_screen(
+        emoji=emoji or None, text=text,
+        bg_r=r, bg_g=g, bg_b=b, fg_r=fg_r, fg_g=fg_g, fg_b=fg_b,
+    )
+    b64 = base64.b64encode(jpeg_data).decode()
+    return {"image": f"data:image/jpeg;base64,{b64}"}
 
 
 @app.post("/api/override/custom")

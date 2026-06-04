@@ -70,11 +70,8 @@ def render_screen(
     img = Image.new("RGB", (SCREEN_W, SCREEN_H), bg)
     draw = ImageDraw.Draw(img)
 
-    if emoji:
-        _draw_emoji(img, draw, emoji, bg)
-
-    if text.strip():
-        _draw_text(draw, text, fg, has_emoji=bool(emoji))
+    if emoji or text.strip():
+        _draw_centered_group(img, draw, emoji or None, text, fg, bg)
 
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=JPEG_QUALITY, optimize=True)
@@ -83,10 +80,129 @@ def render_screen(
     return data
 
 
+def _draw_centered_group(img: Image.Image, draw: ImageDraw.Draw,
+                          emoji: Optional[str], text: str, fg: tuple, bg: tuple):
+    """
+    Render emoji + text as a vertically centered group on the screen.
+    Measures each element, stacks them with a gap, and centers the whole block.
+    """
+    EMOJI_SIZE = int(SCREEN_H * 0.38)   # ~170px
+    GAP = int(SCREEN_H * 0.06)          # ~27px between emoji and text
+    PADDING = int(SCREEN_H * 0.04)      # ~18px top/bottom padding
+
+    # --- Measure text block with word-wrap ---
+    MIN_FONT = 36   # minimum readable from a few feet away
+    MAX_FONT = 72
+    text_font = None
+    text_size = MAX_FONT
+    lines = []
+
+    raw_lines = (text.strip().split("\n") if text.strip() else [])
+
+    def wrap_lines(font, raw, max_w):
+        """Word-wrap raw lines to fit max_w pixels."""
+        result = []
+        for raw_line in raw:
+            words = raw_line.split()
+            if not words:
+                result.append("")
+                continue
+            current = ""
+            for word in words:
+                test = (current + " " + word).strip()
+                bbox = draw.textbbox((0, 0), test, font=font)
+                if bbox[2] - bbox[0] <= max_w:
+                    current = test
+                else:
+                    if current:
+                        result.append(current)
+                    current = word
+            if current:
+                result.append(current)
+        return result
+
+    MAX_TEXT_W = SCREEN_W - 32
+    if raw_lines:
+        while text_size >= MIN_FONT:
+            f = _load_font(TEXT_FONT_CANDIDATES, text_size)
+            if f:
+                wrapped = wrap_lines(f, raw_lines, MAX_TEXT_W)
+                # Check all wrapped lines fit width
+                fits = all(
+                    draw.textbbox((0, 0), l, font=f)[2] <= MAX_TEXT_W
+                    for l in wrapped
+                )
+                if fits:
+                    text_font = f
+                    lines = wrapped
+                    break
+            text_size -= 4
+        if not text_font:
+            # Fallback: use min size with wrapping
+            text_font = _load_font(TEXT_FONT_CANDIDATES, MIN_FONT)
+            if text_font:
+                lines = wrap_lines(text_font, raw_lines, MAX_TEXT_W)
+            else:
+                lines = raw_lines
+
+    line_bboxes = []
+    line_h = 0
+    if text_font and lines:
+        line_bboxes = [draw.textbbox((0, 0), l, font=text_font) for l in lines]
+        line_h = max((b[3] - b[1]) for b in line_bboxes)
+    line_spacing = int(line_h * 0.15)
+    text_block_h = len(lines) * line_h + max(0, len(lines)-1) * line_spacing if lines else 0
+
+    # --- Calculate total group height ---
+    emoji_block_h = EMOJI_SIZE if emoji else 0
+    gap = GAP if (emoji and lines) else 0
+    total_h = emoji_block_h + gap + text_block_h
+
+    # --- Center vertically ---
+    top = max(PADDING, (SCREEN_H - total_h) // 2)
+
+    # --- Draw emoji ---
+    if emoji:
+        font = _load_font(EMOJI_FONT_CANDIDATES, EMOJI_SIZE)
+        if font:
+            try:
+                canvas = Image.new("RGBA", (SCREEN_W, emoji_block_h), (0, 0, 0, 0))
+                cdraw = ImageDraw.Draw(canvas)
+                # Try measuring with and without variation selectors
+                # Some multi-codepoint emoji (e.g. ✈️) return unusual bboxes
+                bbox = cdraw.textbbox((0, 0), emoji, font=font)
+                ew, eh = bbox[2] - bbox[0], bbox[3] - bbox[1]
+
+                # If bbox looks unreasonable, try stripping variation selectors
+                if ew <= 0 or ew > SCREEN_W or eh <= 0:
+                    clean = emoji.replace('️', '').replace('︎', '')
+                    bbox = cdraw.textbbox((0, 0), clean, font=font)
+                    ew, eh = bbox[2] - bbox[0], bbox[3] - bbox[1]
+
+                # Clamp to canvas bounds
+                x = max(0, min(SCREEN_W - ew, (SCREEN_W - ew) // 2 - bbox[0]))
+                y = max(0, (emoji_block_h - eh) // 2 - bbox[1])
+                cdraw.text((x, y), emoji, font=font, embedded_color=True)
+                bg_layer = Image.new("RGBA", (SCREEN_W, emoji_block_h), (*bg, 255))
+                composited = Image.alpha_composite(bg_layer, canvas)
+                img.paste(composited.convert("RGB"), (0, top))
+            except Exception as e:
+                logger.warning(f"Emoji draw failed: {e}")
+
+    # --- Draw text ---
+    if text_font and lines:
+        y = top + emoji_block_h + gap
+        for line, bbox in zip(lines, line_bboxes):
+            lw = bbox[2] - bbox[0]
+            x = (SCREEN_W - lw) // 2 - bbox[0]
+            draw.text((x, y), line, font=text_font, fill=fg)
+            y += line_h + line_spacing
+
+
 def _draw_emoji(img: Image.Image, draw: ImageDraw.Draw, emoji: str, bg: tuple):
-    """Draw emoji centered in the upper 55% of the screen."""
-    emoji_size = int(SCREEN_H * 0.42)  # ~188px — about 42% of screen height
-    area_h = int(SCREEN_H * 0.55)      # emoji lives in top 55%
+    """Draw emoji centered in the upper portion of the screen with padding."""
+    emoji_size = int(SCREEN_H * 0.46)  # ~206px — large and prominent
+    area_h = int(SCREEN_H * 0.58)      # emoji lives in top 58%
 
     font = _load_font(EMOJI_FONT_CANDIDATES, emoji_size)
     if not font:
@@ -119,10 +235,11 @@ def _draw_emoji(img: Image.Image, draw: ImageDraw.Draw, emoji: str, bg: tuple):
 
 def _draw_text(draw: ImageDraw.Draw, text: str, fg: tuple, has_emoji: bool):
     """Draw text centered in the lower portion of the screen."""
-    # Text area: lower 45% if there's an emoji, full screen if not
-    text_area_top = int(SCREEN_H * 0.57) if has_emoji else 0
-    text_area_h = SCREEN_H - text_area_top
-    padding = 12
+    # Text area: lower portion if there's an emoji, full screen if not
+    # Leave a gap between emoji bottom and text top
+    text_area_top = int(SCREEN_H * 0.62) if has_emoji else 0
+    text_area_h = SCREEN_H - text_area_top - 20  # 20px bottom padding
+    padding = 16
 
     # Try to find a good font size that fits
     lines = text.split("\n") or [text]

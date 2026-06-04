@@ -108,22 +108,26 @@ class StateCommandCallback : public NimBLECharacteristicCallbacks {
 
             case OP_IMAGE_CHUNK: {
                 if (!img_buffer || len < 3) break;
-                uint16_t chunk_idx = data[1] | (data[2] << 8);
+                // Append sequentially — works for any chunk size
                 size_t payload_len = len - 3;
-                size_t offset = chunk_idx * 509;
-                if (offset + payload_len <= img_total_size)
-                    memcpy(img_buffer + offset, &data[3], payload_len);
-                img_received += payload_len;
+                if (img_received + payload_len <= img_total_size) {
+                    memcpy(img_buffer + img_received, &data[3], payload_len);
+                    img_received += payload_len;
+                }
                 break;
             }
 
             case OP_IMAGE_END: {
                 if (!img_buffer || len < 5) break;
+                if (img_received < img_total_size) {
+                    Serial.printf("BLE: image incomplete %zu/%zu\n", img_received, img_total_size);
+                    break;
+                }
                 cmd.valid = true;
                 cmd.state = STATE_CUSTOM_IMAGE;
                 pending_set(cmd);
                 send_status_notify();
-                Serial.println("BLE: queued image display");
+                Serial.printf("BLE: queued image %zu bytes\n", img_total_size);
                 break;
             }
 

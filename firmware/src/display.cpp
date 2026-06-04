@@ -208,27 +208,37 @@ void display_show_icon_text(uint8_t icon_id, const char* text, uint8_t r, uint8_
     screen_on = true;
 }
 
-// JPEGDEC draw callback
+// JPEGDEC draw callback — write one row at a time to stay within QSPI DMA limits
 static int jpeg_draw_callback(JPEGDRAW* pDraw) {
     if (!gfx) return 0;
-    gfx->draw16bitRGBBitmap(pDraw->x, pDraw->y,
-                             pDraw->pPixels, pDraw->iWidth, pDraw->iHeight);
+    for (int row = 0; row < pDraw->iHeight; row++) {
+        gfx->draw16bitRGBBitmap(
+            pDraw->x, pDraw->y + row,
+            pDraw->pPixels + (row * pDraw->iWidth),
+            pDraw->iWidth, 1
+        );
+    }
     return 1;
 }
 
 void display_show_image(const uint8_t* jpeg_data, size_t jpeg_len) {
     if (!gfx || !jpeg_data || jpeg_len == 0) return;
 
+    gfx->fillScreen(BLACK);  // clear previous content before decoding
     if (jpeg.openRAM((uint8_t*)jpeg_data, (int)jpeg_len, jpeg_draw_callback)) {
         jpeg.setPixelType(RGB565_LITTLE_ENDIAN);
-        gfx->startWrite();
-        jpeg.decode(0, 0, 0);
-        gfx->endWrite();
+        // Note: do NOT wrap in startWrite/endWrite — JPEGDEC calls the draw
+        // callback repeatedly and draw16bitRGBBitmap manages its own transactions
+        int result = jpeg.decode(0, 0, 0);
         jpeg.close();
-        screen_on = true;
-        Serial.printf("JPEG decoded: %dx%d\n", jpeg.getWidth(), jpeg.getHeight());
+        if (result) {
+            screen_on = true;
+            Serial.printf("JPEG decoded OK: %dx%d\n", jpeg.getWidth(), jpeg.getHeight());
+        } else {
+            Serial.println("JPEG decode failed");
+        }
     } else {
-        Serial.println("JPEG decode failed");
+        Serial.println("JPEG open failed");
     }
 }
 

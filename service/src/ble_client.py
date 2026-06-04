@@ -180,12 +180,21 @@ class BLEClient:
                     await self._write(client, payload)
                     logger.info(f"Sent: CUSTOM_TEXT '{custom.text}'")
 
-            elif state in (DisplayState.OFF, DisplayState.IN_MEETING,
-                           DisplayState.WFH, DisplayState.OOF):
-                # Use simple preset command — image-based presets require
-                # JPEG firmware fix (pending flash when USB driver is resolved)
+            elif state == DisplayState.OFF:
                 await self._write(client, [OP_SET_PRESET, int(state)])
-                logger.info(f"Sent: PRESET {state.name}")
+                logger.info("Sent: PRESET OFF")
+
+            elif state in (DisplayState.IN_MEETING, DisplayState.WFH, DisplayState.OOF):
+                preset_payload = _PRESET_CONFIG.get(state)
+                if preset_payload:
+                    emoji, text, bg_r, bg_g, bg_b = preset_payload
+                    fake_custom = CustomPayload(text=text, r=bg_r, g=bg_g, b=bg_b,
+                                                emoji=emoji, fg_r=-1, fg_g=-1, fg_b=-1)
+                    await self._send_screen_image(client, fake_custom)
+                    logger.info(f"Sent: PRESET {state.name} as image")
+                else:
+                    await self._write(client, [OP_SET_PRESET, int(state)])
+                    logger.info(f"Sent: PRESET {state.name}")
 
         except Exception as e:
             logger.error(f"BLE write error: {e} — disconnecting to force reconnect")
@@ -215,16 +224,14 @@ class BLEClient:
         await asyncio.sleep(0.05)
 
         # IMAGE_CHUNK: [opcode(1)][chunk_idx(2)][data...]
-        chunk_size = 200  # conservative for write-without-response reliability
+        # 490 bytes fits within 512 MTU (512 - 3 ATT header - 3 our header = 506, conservative 490)
+        chunk_size = 490
         chunk_idx = 0
         for offset in range(0, total, chunk_size):
             chunk = jpeg_data[offset:offset + chunk_size]
             header = struct.pack("<BH", OP_IMAGE_CHUNK, chunk_idx)
-            await self._write(client, header + chunk)
+            await client.write_gatt_char(self._cmd_char, header + chunk, response=True)
             chunk_idx += 1
-            # Small yield to avoid flooding the BLE stack
-            if chunk_idx % 10 == 0:
-                await asyncio.sleep(0.01)
 
         # IMAGE_END: [opcode(1)][crc32(4)]
         await asyncio.sleep(0.05)
