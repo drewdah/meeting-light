@@ -100,12 +100,31 @@ docker compose up
 
 On first run, the web UI at `http://<your-pc>:8080` will show a Microsoft device code. Visit the URL shown and enter the code to authenticate. The service will then start polling your calendar automatically.
 
+### Calendar Provider
+
+Set `CALENDAR_PROVIDER=microsoft` (default) or `CALENDAR_PROVIDER=google` in `.env`.
+
 ### Microsoft Graph App Registration
 
 1. Go to [portal.azure.com](https://portal.azure.com) → Azure Active Directory → App registrations → New registration
 2. Set as a **Public client / native app**
 3. Add delegated permissions: `Calendars.Read`, `Presence.Read`, `User.Read`, `MailboxSettings.Read`
 4. Copy the **Application (client) ID** into `.env` as `MS_GRAPH_CLIENT_ID`
+
+### Google Calendar App Registration
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) → New project
+2. Enable the **Google Calendar API**
+3. Create credentials → **OAuth client ID** → Application type: **TV and Limited Input devices**
+4. Copy the **Client ID** and **Client Secret** into `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+5. Set `CALENDAR_PROVIDER=google` in `.env`
+
+On first run, visit the URL shown in the web UI and enter the code to authenticate (same flow as Microsoft).
+
+**What gets detected with Google Calendar:**
+- In a Meeting: any busy (opaque) event on your primary calendar
+- Working From Home: [Working Location](https://support.google.com/calendar/answer/11896660) events set to Home Office
+- Out of Office: native Out of Office events
 
 ### Finding Your ESP32 MAC Address
 

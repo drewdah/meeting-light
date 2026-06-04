@@ -8,9 +8,16 @@ class Settings(BaseSettings):
     # BLE
     esp32_mac_address: str = Field(default="", description="MAC address of the ESP32 device")
 
+    # Calendar provider: "microsoft" or "google"
+    calendar_provider: str = Field(default="microsoft")
+
     # Microsoft Graph
     ms_graph_client_id: str = Field(default="")
     ms_graph_tenant_id: str = Field(default="common")
+
+    # Google Calendar
+    google_client_id: str = Field(default="")
+    google_client_secret: str = Field(default="")
 
     # Schedule
     business_hours_start: int = Field(default=9, description="Business hours start (24h)")

@@ -12,6 +12,7 @@ from typing import Optional
 import aiohttp
 import msal
 
+from .calendar_base import CalendarProvider
 from .config import settings
 from .state_machine import DisplayState
 
@@ -22,7 +23,7 @@ SCOPES = ["Calendars.Read", "Presence.Read", "User.Read", "MailboxSettings.Read"
 TOKEN_CACHE_PATH = os.path.join(settings.data_dir, "token_cache.json")
 
 
-class GraphClient:
+class GraphClient(CalendarProvider):
     def __init__(self):
         self._token_cache = msal.SerializableTokenCache()
         self._app: Optional[msal.PublicClientApplication] = None
@@ -50,6 +51,13 @@ class GraphClient:
                 token_cache=self._token_cache,
             )
         return self._app
+
+    # CalendarProvider interface aliases
+    async def start_auth_flow(self) -> dict:
+        return await self.start_device_code_flow()
+
+    async def poll_auth(self) -> bool:
+        return await self.poll_device_code()
 
     async def start_device_code_flow(self) -> dict:
         """Start device code auth flow. Returns dict with user_code and verification_uri."""

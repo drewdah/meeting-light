@@ -17,7 +17,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..config import settings
 from ..state_machine import DisplayState, CustomPayload, state_machine
-from ..graph_client import graph_client
+from ..calendar_factory import get_calendar_provider
 from ..ble_client import ble_client
 from ..scheduler import graph_poll_loop, tick_loop
 from .. import settings_store
@@ -92,8 +92,9 @@ def snapshot_to_dict(snap) -> dict:
         "ble_connected": snap.ble_connected,
         "last_seen": snap.last_seen.strftime("%I:%M:%S %p").lstrip("0") if snap.last_seen else None,
         "override_expires": snap.override_expires.strftime("%I:%M %p").lstrip("0") if snap.override_expires else None,
-        "authenticated": graph_client.is_authenticated,
-        "device_code": graph_client.device_code_info,
+        "authenticated": get_calendar_provider().is_authenticated,
+        "device_code": get_calendar_provider().device_code_info,
+        "calendar_provider": settings.calendar_provider,
     }
 
 
@@ -192,7 +193,7 @@ async def clear_logs():
 
 @app.post("/api/auth/start")
 async def start_auth():
-    flow = await graph_client.start_device_code_flow()
+    flow = await get_calendar_provider().start_auth_flow()
     return {
         "user_code": flow.get("user_code"),
         "verification_uri": flow.get("verification_uri"),
@@ -202,7 +203,7 @@ async def start_auth():
 
 @app.post("/api/auth/poll")
 async def poll_auth():
-    success = await graph_client.poll_device_code()
+    success = await get_calendar_provider().poll_auth()
     return {"authenticated": success}
 
 

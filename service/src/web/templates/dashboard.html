@@ -89,7 +89,7 @@
     <!-- Auth Banner -->
     {% if not snap.authenticated %}
     <div class="bg-yellow-900 border border-yellow-600 rounded-xl p-4" id="auth-banner">
-      <h2 class="font-semibold text-yellow-300 mb-2">⚠️ Sign in to Microsoft 365</h2>
+      <h2 class="font-semibold text-yellow-300 mb-2">⚠️ Sign in to {{ "Google Calendar" if snap.calendar_provider == "google" else "Microsoft 365" }}</h2>
       <p class="text-sm text-yellow-200 mb-3">Calendar detection requires authentication.</p>
       {% if snap.device_code %}
       <div class="bg-yellow-800 rounded p-3 mb-3 font-mono text-center">
