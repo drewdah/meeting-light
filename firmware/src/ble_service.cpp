@@ -59,6 +59,7 @@ class StateCommandCallback : public NimBLECharacteristicCallbacks {
                 uint8_t state_id = data[1];
                 if (state_id > STATE_OOF) break;
                 cmd.valid = true;
+                cmd.set_state = true;
                 cmd.state = (DisplayState)state_id;
                 pending_set(cmd);
                 send_status_notify();
@@ -70,6 +71,7 @@ class StateCommandCallback : public NimBLECharacteristicCallbacks {
                 // [opcode][bg_r][bg_g][bg_b][fg_r][fg_g][fg_b][text...]
                 if (len < 8) break;
                 cmd.valid = true;
+                cmd.set_state = true;
                 cmd.state = STATE_CUSTOM_TEXT;
                 cmd.r = data[1]; cmd.g = data[2]; cmd.b = data[3];
                 cmd.fg_r = data[4]; cmd.fg_g = data[5]; cmd.fg_b = data[6];
@@ -84,6 +86,7 @@ class StateCommandCallback : public NimBLECharacteristicCallbacks {
 
             case OP_SLEEP: {
                 cmd.valid = true;
+                cmd.set_state = true;
                 cmd.state = STATE_OFF;
                 cmd.sleep = true;
                 pending_set(cmd);
@@ -124,6 +127,7 @@ class StateCommandCallback : public NimBLECharacteristicCallbacks {
                     break;
                 }
                 cmd.valid = true;
+                cmd.set_state = true;
                 cmd.state = STATE_CUSTOM_IMAGE;
                 pending_set(cmd);
                 send_status_notify();
@@ -134,7 +138,7 @@ class StateCommandCallback : public NimBLECharacteristicCallbacks {
             case OP_SET_BRIGHTNESS: {
                 if (len < 2) break;
                 cmd.valid = true;
-                cmd.state = state_get_current();  // keep current state
+                // set_state intentionally left false — brightness only, no display redraw
                 cmd.brightness = data[1];
                 pending_set(cmd);
                 break;

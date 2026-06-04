@@ -5,6 +5,7 @@
 // Pending command — set by BLE callback, executed by main loop
 struct PendingCommand {
     bool valid = false;
+    bool set_state = false;    // true only when a display state change is intended
     DisplayState state = STATE_OFF;
     // Background color
     uint8_t r = 0, g = 0, b = 0;

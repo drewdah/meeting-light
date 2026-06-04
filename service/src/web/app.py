@@ -242,6 +242,8 @@ async def update_settings(
         "google_client_id": google_client_id,
         "google_client_secret": google_client_secret,
     })
+    # Push brightness to device immediately
+    await ble_client.set_brightness(default_brightness)
     # Trigger state machine tick to re-evaluate business hours
     await state_machine.tick()
     return {"ok": True}

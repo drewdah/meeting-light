@@ -5,6 +5,8 @@
 #include <Wire.h>
 #include <JPEGDEC.h>
 #include "icon_data.h"
+#include "boot_splash.h"
+#include "preset_images.h"
 
 static JPEGDEC jpeg;
 
@@ -51,6 +53,20 @@ void display_init() {
 
     display_set_brightness(128);
     screen_on = true;
+}
+
+// PROGMEM data lives in read-only flash; JPEGDEC's openRAM() writes into the
+// buffer as scratch space, so copy to heap RAM before decoding.
+static void show_progmem_jpeg(const uint8_t* pgm_data, size_t len) {
+    uint8_t* buf = (uint8_t*)malloc(len);
+    if (!buf) { Serial.println("show_progmem_jpeg: malloc failed"); return; }
+    memcpy_P(buf, pgm_data, len);
+    display_show_image(buf, len);
+    free(buf);
+}
+
+void display_show_boot_splash() {
+    show_progmem_jpeg(BOOT_SPLASH_DATA, BOOT_SPLASH_LEN);
 }
 
 // Draw each line of text individually centered on screen.
@@ -107,23 +123,21 @@ static void draw_centered_text(const char* text, uint16_t fg_color, uint16_t bg_
 
 void display_show_preset(DisplayState state) {
     if (!gfx) return;
-
     switch (state) {
         case STATE_IN_MEETING:
-            draw_centered_text("IN A\nMEETING", WHITE, RED, 5);
+            show_progmem_jpeg(PRESET_IN_MEETING_DATA, PRESET_IN_MEETING_LEN);
             break;
         case STATE_WFH:
-            // Mostly black for power savings on all-day status
-            draw_centered_text("Working\nFrom\nHome", 0x07E0 /* green */, BLACK, 4);
+            show_progmem_jpeg(PRESET_WFH_DATA, PRESET_WFH_LEN);
             break;
         case STATE_OOF:
-            // Mostly black for power savings on all-day status
-            draw_centered_text("Out of\nOffice", 0x631F /* purple */, BLACK, 4);
+            show_progmem_jpeg(PRESET_OOF_DATA, PRESET_OOF_LEN);
             break;
         case STATE_OFF:
         default:
             gfx->fillScreen(BLACK);
-            break;
+            screen_on = false;
+            return;
     }
     screen_on = true;
 }

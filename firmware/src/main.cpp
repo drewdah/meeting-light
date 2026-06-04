@@ -56,18 +56,19 @@ void setup() {
 
     buttons_on_boot_press(on_boot_button);
 
-    // Restore last display state after boot
+    // Boot splash — stays visible until BLE connects and sends the real image
+    display_show_boot_splash();
+
+    // Restore saved state in NVS so button cycling and BLE stay in sync,
+    // but don't re-render locally — the service pushes the correct JPEG on connect.
     DisplayState saved = state_get_current();
-    if (saved != STATE_OFF) {
-        display_show_preset(saved);
-        // Sync cycle_index
-        for (uint8_t i = 0; i < PRESET_COUNT; i++) {
-            if (PRESET_CYCLE[i] == saved) {
-                cycle_index = i;
-                break;
-            }
+    for (uint8_t i = 0; i < PRESET_COUNT; i++) {
+        if (PRESET_CYCLE[i] == saved) {
+            cycle_index = i;
+            break;
         }
-    } else {
+    }
+    if (saved == STATE_OFF) {
         display_off();
     }
 
@@ -91,26 +92,28 @@ void loop() {
         if (cmd.brightness > 0) {
             display_set_brightness(cmd.brightness);
         }
-        state_set(cmd.state);
-        if (cmd.state == STATE_OFF) {
-            display_off();
-        } else if (cmd.state == STATE_CUSTOM_TEXT) {
-            display_on();
-            display_show_custom_text(cmd.text, cmd.r, cmd.g, cmd.b,
-                                     cmd.fg_r, cmd.fg_g, cmd.fg_b);
-        } else if (cmd.state == STATE_CUSTOM_IMAGE) {
-            display_on();
-            display_show_image(ble_get_image_data(), ble_get_image_len());
-            ble_free_image();
-        } else {
-            display_on();
-            display_show_preset(cmd.state);
+        if (cmd.set_state) {
+            state_set(cmd.state);
+            if (cmd.state == STATE_OFF) {
+                display_off();
+            } else if (cmd.state == STATE_CUSTOM_TEXT) {
+                display_on();
+                display_show_custom_text(cmd.text, cmd.r, cmd.g, cmd.b,
+                                         cmd.fg_r, cmd.fg_g, cmd.fg_b);
+            } else if (cmd.state == STATE_CUSTOM_IMAGE) {
+                display_on();
+                display_show_image(ble_get_image_data(), ble_get_image_len());
+                ble_free_image();
+            } else {
+                display_on();
+                display_show_preset(cmd.state);
+            }
+            state_save_to_nvs();
+            ble_notify_status(cmd.state,
+                              power_get_battery_percent(),
+                              power_is_charging(),
+                              power_get_battery_mv());
         }
-        state_save_to_nvs();
-        ble_notify_status(cmd.state,
-                          power_get_battery_percent(),
-                          power_is_charging(),
-                          power_get_battery_mv());
     }
 
     // Periodic battery status report

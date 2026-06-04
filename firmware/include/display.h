@@ -3,6 +3,7 @@
 #include "config.h"
 
 void display_init();
+void display_show_boot_splash();
 void display_show_preset(DisplayState state);
 void display_show_custom_text(const char* text, uint8_t r, uint8_t g, uint8_t b,
                               uint8_t fg_r=255, uint8_t fg_g=255, uint8_t fg_b=255);

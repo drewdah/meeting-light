@@ -16,6 +16,7 @@ from bleak.backends.characteristic import BleakGATTCharacteristic
 from .config import settings
 from .state_machine import DisplayState, CustomPayload, state_machine
 from .image_processor import render_screen
+from . import settings_store
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +117,11 @@ class BLEClient:
             if status_char:
                 await client.start_notify(status_char, self._on_status_notify)
 
+            # Apply saved brightness on every connect
+            brightness = settings_store.get("default_brightness", settings.default_brightness)
+            await self._write(client, [OP_SET_BRIGHTNESS, max(0, min(255, int(brightness)))])
+            logger.info(f"Sent: SET_BRIGHTNESS {brightness}")
+
             # Send current state immediately on connect
             if self._pending_state:
                 await self._send_pending(client)
@@ -185,9 +191,15 @@ class BLEClient:
                     logger.info(f"Sent: PRESET {state.name}")
 
         except Exception as e:
-            logger.error(f"BLE write error: {e} — disconnecting to force reconnect")
+            msg = str(e)
+            # Connection-closed errors are expected when BLE drops mid-transfer
+            if not client.is_connected or "closed" in msg.lower() or "disconnected" in msg.lower():
+                logger.warning(f"BLE disconnected during send: {e}")
+            else:
+                logger.error(f"BLE write error: {e} — disconnecting to force reconnect")
             self._connected = False
-            await client.disconnect()
+            if client.is_connected:
+                await client.disconnect()
 
     async def _send_screen_image(self, client: BleakClient, custom: CustomPayload):
         """Render and transfer a full-screen JPEG via IMAGE_START/CHUNK/END."""
@@ -204,12 +216,18 @@ class BLEClient:
         crc = zlib.crc32(jpeg_data) & 0xFFFFFFFF
         logger.info(f"Sending {total} byte JPEG in chunks...")
 
+        # Snapshot characteristic once — disconnect callback may null self._cmd_char mid-transfer
+        cmd_char = self._cmd_char
+        if not cmd_char:
+            logger.warning("Image send aborted: characteristic gone before transfer started")
+            return
+
         # IMAGE_START: [opcode(1)][total_size(4)][w(2)][h(2)][format(1)]
         # format 1 = full-screen JPEG
         from .image_processor import SCREEN_W, SCREEN_H
         start_payload = struct.pack("<BIHHB", OP_IMAGE_START, total,
                                     SCREEN_W, SCREEN_H, 1)
-        await self._write(client, start_payload)
+        await client.write_gatt_char(cmd_char, bytes(start_payload), response=False)
         await asyncio.sleep(0.05)
 
         # IMAGE_CHUNK: [opcode(1)][chunk_idx(2)][data...]
@@ -217,24 +235,37 @@ class BLEClient:
         chunk_size = 490
         chunk_idx = 0
         for offset in range(0, total, chunk_size):
+            if not client.is_connected:
+                logger.warning("BLE disconnected mid-transfer, aborting")
+                return
             chunk = jpeg_data[offset:offset + chunk_size]
             header = struct.pack("<BH", OP_IMAGE_CHUNK, chunk_idx)
-            await client.write_gatt_char(self._cmd_char, header + chunk, response=True)
+            await client.write_gatt_char(cmd_char, header + chunk, response=True)
             chunk_idx += 1
 
         # IMAGE_END: [opcode(1)][crc32(4)]
         await asyncio.sleep(0.05)
         end_payload = struct.pack("<BI", OP_IMAGE_END, crc)
-        await self._write(client, end_payload)
+        await client.write_gatt_char(cmd_char, bytes(end_payload), response=False)
         logger.info(f"Image transfer complete: {chunk_idx} chunks")
 
     async def _write(self, client: BleakClient, data: list[int] | bytes):
-        if self._cmd_char:
-            await client.write_gatt_char(self._cmd_char, bytes(data), response=False)
+        cmd_char = self._cmd_char  # snapshot — disconnect callback may null self._cmd_char
+        if cmd_char:
+            await client.write_gatt_char(cmd_char, bytes(data), response=False)
 
     @property
     def is_connected(self) -> bool:
         return self._connected
+
+    async def set_brightness(self, level: int):
+        """Send brightness immediately if connected; saved value applied on next connect otherwise."""
+        level = max(0, min(255, int(level)))
+        if self._client and self._client.is_connected and self._cmd_char:
+            await self._write(self._client, [OP_SET_BRIGHTNESS, level])
+            logger.info(f"Sent: SET_BRIGHTNESS {level}")
+        else:
+            logger.info(f"BLE not connected — brightness {level} will apply on next connect")
 
     async def force_reconnect(self):
         """Force disconnect — connection loop will reconnect automatically."""
@@ -247,11 +278,7 @@ class BLEClient:
 
 def settings_store_get_mac() -> str:
     """Get MAC from settings store (allows runtime updates)."""
-    try:
-        from . import settings_store
-        return settings_store.get("esp32_mac_address", settings.esp32_mac_address)
-    except Exception:
-        return settings.esp32_mac_address
+    return settings_store.get("esp32_mac_address", settings.esp32_mac_address)
 
 
 ble_client = BLEClient()

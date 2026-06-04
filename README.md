@@ -18,14 +18,17 @@ ESP32-C6 AMOLED  <──BLE──>  Mini PC Service  <──Graph API──>  Mi
 
 ## Features
 
-- **Automatic detection** — polls Outlook calendar every 60s for meetings, WFH location, and Out of Office status
+- **Automatic detection** — polls Outlook or Google calendar for meetings, WFH location, and Out of Office status
 - **Emoji + text display** — full-resolution images rendered service-side with any emoji and custom text, transferred to the display over BLE
 - **Full emoji picker** — pick any emoji from the web UI; no pre-compilation required
 - **Preview before send** — see exactly what will appear on screen, with font size +/− controls
 - **Manual overrides** — preset buttons (In a Meeting, WFH, OOF) or custom message with background color and emoji
 - **Override expiry** — set duration (30 min, 1 hr, end of day, etc.) before reverting to calendar state
+- **Boot button controls** — tap to cycle through preset states; hold 3 seconds to reboot
+- **Boot splash** — shows a 💡 Meeting Light logo on startup while connecting to the service
 - **Business hours scheduling** — device sleeps outside M–F 9–5; configurable in the web UI
 - **Battery monitoring** — live battery % and voltage reported back via BLE notification
+- **Brightness control** — adjustable in Settings, applied immediately to the device
 - **Real-time log panel** — connection and transfer logs visible in the web UI
 - **Remote access** — web UI accessible via Tailscale from anywhere
 
@@ -44,7 +47,15 @@ ESP32-C6 AMOLED  <──BLE──>  Mini PC Service  <──Graph API──>  Mi
 - [Waveshare ESP32-C6 Touch AMOLED 1.8"](https://www.waveshare.com/esp32-c6-touch-amoled-1.8.htm) — 368×448 AMOLED, BLE 5, two hardware buttons, LiPo connector
 - Always-on mini PC at desk (Raspberry Pi, mini PC, etc.)
 - LiPo battery (~1000mAh+), swappable; device sleeps outside business hours
-- The two side buttons cycle through preset states as a local override
+
+### Button Controls
+
+The device has two buttons — **BOOT** (side) and **PWR** (side):
+
+| Gesture | Action |
+|---------|--------|
+| Tap BOOT | Cycle through Off → In a Meeting → WFH → Out of Office |
+| Hold BOOT 3s | Reboot device |
 
 ## Project Structure
 
@@ -70,11 +81,12 @@ pio run                          # build
 pio run -t upload --upload-port COM9   # flash via USB-C (adjust port)
 ```
 
-To regenerate emoji bitmap assets (stored in `include/icon_data.h`):
+To regenerate the pre-compiled preset and boot splash images (run from repo root after changing the service rendering):
 ```bash
-cd firmware/tools
-python gen_icons.py
+python firmware/tools/gen_preset_images.py   # In a Meeting, WFH, OOF
+python firmware/tools/gen_boot_splash.py     # Boot splash
 ```
+Then reflash the firmware.
 
 ### Service
 
@@ -193,6 +205,7 @@ All settings are configurable in the web UI under ⚙️ Settings:
 ## Architecture Notes
 
 - **State priority**: Manual override > Calendar-detected > Schedule (sleep) > Off
-- **Image transfer**: Service renders full 368×448 JPEG using Pillow (Segoe UI Emoji on Windows), transfers in ~490-byte acknowledged BLE chunks (~2–3 seconds)
+- **Image transfer**: Service renders full 368×448 JPEG using Pillow (Segoe UI Emoji on Windows), transfers in ~490-byte acknowledged BLE chunks
+- **Preset images**: In a Meeting, WFH, OOF, and the boot splash are pre-compiled as JPEG byte arrays in firmware (`preset_images.h`, `boot_splash.h`). The boot button cycles through these instantly with no BLE transfer. Re-run the generator scripts and reflash to update them.
 - **BLE**: NimBLE peripheral on ESP32, bleak central on mini PC. Custom GATT service with state command + device status characteristics
 - **Power**: AMOLED with mostly-dark backgrounds; device deep-sleeps outside business hours. Target ~1 week battery life with 1000mAh LiPo
