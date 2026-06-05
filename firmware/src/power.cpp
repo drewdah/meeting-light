@@ -58,6 +58,11 @@ bool power_is_charging() {
     return pmu.isCharging();
 }
 
+bool power_is_vbus_in() {
+    if (!pmu_ok) return false;
+    return pmu.isVbusIn();
+}
+
 void power_disable_display_rail() {
     if (!pmu_ok) return;
     pmu.disableBLDO1();

@@ -25,13 +25,13 @@
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold">💡 Meeting Light</h1>
       <div class="flex items-center gap-3">
+        <span class="text-sm text-gray-400" id="last-updated"></span>
         <button onclick="toggleMute()" id="mute-btn"
           class="text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
           title="Mute/unmute device sounds">
           <span id="mute-icon">🔊</span>
           <span id="mute-label">Sound</span>
         </button>
-        <span class="text-sm text-gray-400" id="last-updated"></span>
       </div>
     </div>
 
@@ -58,28 +58,32 @@
             <div id="ble-status" class="font-medium {{ 'text-green-400' if snap.ble_connected else 'text-red-400' }}">
               {{ '● Connected' if snap.ble_connected else '○ Disconnected' }}
             </div>
-            {% if snap.last_seen %}
-            <div class="text-gray-500 text-xs" id="last-seen">Last seen {{ snap.last_seen }}</div>
-            {% endif %}
+            <div class="text-gray-500 text-xs" id="last-seen">
+              {% if snap.last_seen %}Last seen <span class="last-seen-ts" data-ts="{{ snap.last_seen }}"></span>{% endif %}
+            </div>
             <button onclick="bleReconnect()" class="mt-2 text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded">
               ↺ Reconnect
             </button>
           </div>
 
           <div class="bg-gray-700 rounded-lg p-3">
-            <div class="text-gray-400 mb-1">Battery</div>
-            {% if snap.battery_percent %}
-            <div id="battery" class="font-medium {{ 'text-red-400' if snap.battery_percent < 20 else 'text-green-400' }}">
-              {{ snap.battery_percent }}%
+            <div class="text-gray-400 mb-1" id="power-heading">Power</div>
+            <div id="battery" class="font-medium text-gray-500">
+              {% if snap.vbus and snap.charging %}
+                <span class="text-yellow-400">⚡ Charging {{ snap.battery_percent }}%</span>
+              {% elif snap.vbus %}
+                <span class="text-blue-400">⚡ USB Powered</span>
+              {% elif snap.battery_percent %}
+                <span class="{{ 'text-red-400' if snap.battery_percent < 20 else 'text-green-400' }}">🔋 {{ snap.battery_percent }}%</span>
+              {% elif snap.ble_connected %}
+                <span class="text-gray-400">—</span>
+              {% else %}
+                Unknown
+              {% endif %}
             </div>
-            <div class="text-gray-500 text-xs" id="battery-mv">{{ snap.battery_mv }}mV</div>
-            {% elif snap.ble_connected %}
-            <div id="battery" class="font-medium text-blue-400">⚡ USB</div>
-            <div class="text-gray-500 text-xs" id="battery-mv">No battery</div>
-            {% else %}
-            <div id="battery" class="text-gray-500">Unknown</div>
-            <div class="text-gray-500 text-xs" id="battery-mv"></div>
-            {% endif %}
+            <div class="text-gray-500 text-xs" id="battery-mv">
+              {% if snap.battery_mv %}{{ snap.battery_mv }}mV{% endif %}
+            </div>
           </div>
 
           <div class="bg-gray-700 rounded-lg p-3">
@@ -358,6 +362,15 @@
   </div>
 
   <script>
+    function formatLocalTime(iso) {
+      return new Date(iso).toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', second:'2-digit', hour12: true});
+    }
+
+    // Format any server-rendered timestamps on load
+    document.querySelectorAll('.last-seen-ts[data-ts]').forEach(el => {
+      el.textContent = formatLocalTime(el.dataset.ts);
+    });
+
     let deviceMuted = false;
 
     async function toggleMute() {
@@ -699,9 +712,22 @@
       ble.textContent = data.ble_connected ? '● Connected' : '○ Disconnected';
       ble.className = `font-medium ${data.ble_connected ? 'text-green-400' : 'text-red-400'}`;
       const batt = document.getElementById('battery');
-      if (data.battery_percent !== null) {
-        batt.textContent = `${data.battery_percent}%`;
-        batt.className = `font-medium ${data.battery_percent < 20 ? 'text-red-400' : 'text-green-400'}`;
+      if (data.vbus && data.charging) {
+        batt.innerHTML = `<span class="text-yellow-400">⚡ Charging ${data.battery_percent}%</span>`;
+      } else if (data.vbus) {
+        batt.innerHTML = `<span class="text-blue-400">⚡ USB Powered</span>`;
+      } else if (data.battery_percent !== null && data.battery_percent > 0) {
+        batt.innerHTML = `<span class="${data.battery_percent < 20 ? 'text-red-400' : 'text-green-400'}">🔋 ${data.battery_percent}%</span>`;
+      } else if (data.ble_connected) {
+        batt.innerHTML = `<span class="text-gray-400">—</span>`;
+      } else {
+        batt.innerHTML = `<span class="text-gray-500">Unknown</span>`;
+      }
+      const lastSeen = document.getElementById('last-seen');
+      if (data.last_seen) {
+        lastSeen.innerHTML = `Last seen ${formatLocalTime(data.last_seen)}`;
+      } else {
+        lastSeen.textContent = '';
       }
       document.getElementById('calendar-state').textContent = data.calendar_label;
       document.getElementById('last-updated').textContent = `Updated ${new Date().toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', second:'2-digit', hour12: true})}`;

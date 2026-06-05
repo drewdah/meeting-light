@@ -48,7 +48,8 @@ static void on_boot_button() {
     ble_notify_status(new_state,
                       power_get_battery_percent(),
                       power_is_charging(),
-                      power_get_battery_mv());
+                      power_get_battery_mv(),
+                      power_is_vbus_in());
 
     Serial.printf("Button: state -> %d\n", new_state);
 }
@@ -183,7 +184,8 @@ void loop() {
             ble_notify_status(cmd.state,
                               power_get_battery_percent(),
                               power_is_charging(),
-                              power_get_battery_mv());
+                              power_get_battery_mv(),
+                              power_is_vbus_in());
         }
     }
 
@@ -195,7 +197,8 @@ void loop() {
             ble_notify_status(state_get_current(),
                               power_get_battery_percent(),
                               power_is_charging(),
-                              power_get_battery_mv());
+                              power_get_battery_mv(),
+                              power_is_vbus_in());
         }
     }
 

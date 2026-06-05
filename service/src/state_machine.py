@@ -53,6 +53,8 @@ class StateSnapshot:
     calendar_state: DisplayState = DisplayState.OFF
     battery_percent: Optional[int] = None
     battery_mv: Optional[int] = None
+    charging: bool = False
+    vbus: bool = False
     ble_connected: bool = False
     last_seen: Optional[datetime] = None
     source: str = "default"  # "override", "calendar", "schedule", "default"
@@ -66,6 +68,8 @@ class StateMachine:
         self._override_expires: Optional[datetime] = None
         self._battery_percent: Optional[int] = None
         self._battery_mv: Optional[int] = None
+        self._charging: bool = False
+        self._vbus: bool = False
         self._ble_connected: bool = False
         self._last_seen: Optional[datetime] = None
         self._lock = asyncio.Lock()
@@ -141,10 +145,13 @@ class StateMachine:
             logger.info("Override cleared")
             await self._maybe_emit()
 
-    async def update_battery(self, percent: int, mv: int, connected: bool):
+    async def update_battery(self, percent: int, mv: int, connected: bool,
+                             charging: bool = False, vbus: bool = False):
         async with self._lock:
             self._battery_percent = percent
             self._battery_mv = mv
+            self._charging = charging
+            self._vbus = vbus
             self._ble_connected = connected
             self._last_seen = datetime.now(settings.tz)
 
@@ -179,6 +186,8 @@ class StateMachine:
             calendar_state=self._calendar_state,
             battery_percent=self._battery_percent,
             battery_mv=self._battery_mv,
+            charging=self._charging,
+            vbus=self._vbus,
             ble_connected=self._ble_connected,
             last_seen=self._last_seen,
             source=source,

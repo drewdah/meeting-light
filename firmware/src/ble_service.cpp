@@ -26,13 +26,15 @@ static void send_status_notify() {
     uint8_t batt_pct = power_get_battery_percent();
     bool charging = power_is_charging();
     uint16_t batt_mv = power_get_battery_mv();
+    bool vbus = power_is_vbus_in();
 
-    uint8_t data[5];
+    uint8_t data[6];
     data[0] = (uint8_t)st;
     data[1] = batt_pct;
     data[2] = charging ? 1 : 0;
     data[3] = batt_mv & 0xFF;
     data[4] = (batt_mv >> 8) & 0xFF;
+    data[5] = vbus ? 1 : 0;
 
     pStatusChar->setValue(data, sizeof(data));
     if (connected) {
@@ -216,15 +218,16 @@ void ble_init() {
     Serial.println("BLE: advertising started");
 }
 
-void ble_notify_status(DisplayState state, uint8_t battery_pct, bool charging, uint16_t battery_mv) {
+void ble_notify_status(DisplayState state, uint8_t battery_pct, bool charging, uint16_t battery_mv, bool vbus) {
     if (!pStatusChar) return;
 
-    uint8_t data[5];
+    uint8_t data[6];
     data[0] = (uint8_t)state;
     data[1] = battery_pct;
     data[2] = charging ? 1 : 0;
     data[3] = battery_mv & 0xFF;
     data[4] = (battery_mv >> 8) & 0xFF;
+    data[5] = vbus ? 1 : 0;
 
     pStatusChar->setValue(data, sizeof(data));
     if (connected) {

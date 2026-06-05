@@ -27,7 +27,7 @@ ESP32-C6 AMOLED  <──BLE──>  Mini PC Service  <──Graph API──>  Mi
 - **Boot button controls** — tap to cycle through preset states; hold 3 seconds to reboot
 - **Boot splash** — shows a 💡 Meeting Light logo on startup while connecting to the service
 - **Business hours scheduling** — device sleeps outside M–F 9–5; configurable in the web UI
-- **Battery monitoring** — live battery % and voltage reported back via BLE notification
+- **Power monitoring** — live battery %, voltage, charging state, and USB power detection reported via BLE; dashboard shows USB Powered, Charging, or battery % as appropriate
 - **Brightness control** — adjustable in Settings, applied immediately to the device
 - **Real-time log panel** — connection and transfer logs visible in the web UI
 - **Remote access** — web UI accessible via Tailscale from anywhere
@@ -208,4 +208,4 @@ All settings are configurable in the web UI under ⚙️ Settings:
 - **Image transfer**: Service renders full 368×448 JPEG using Pillow (Segoe UI Emoji on Windows), transfers in ~490-byte acknowledged BLE chunks
 - **Preset images**: In a Meeting, WFH, OOF, and the boot splash are pre-compiled as JPEG byte arrays in firmware (`preset_images.h`, `boot_splash.h`). The boot button cycles through these instantly with no BLE transfer. Re-run the generator scripts and reflash to update them.
 - **BLE**: NimBLE peripheral on ESP32, bleak central on mini PC. Custom GATT service with state command + device status characteristics
-- **Power**: AMOLED with mostly-dark backgrounds; device deep-sleeps outside business hours. Target ~1 week battery life with 1000mAh LiPo
+- **Power**: AXP2101 PMIC reports battery %, voltage, charging state, and USB/VBUS presence over BLE. AMOLED with mostly-dark backgrounds; device deep-sleeps outside business hours. Target ~1 week battery life with 1000mAh LiPo
