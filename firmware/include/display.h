@@ -13,3 +13,4 @@ void display_set_brightness(uint8_t level);
 void display_off();
 void display_on();
 bool display_is_on();
+void display_pa_enable(bool enable);  // Control speaker amp via TCA9554 P7

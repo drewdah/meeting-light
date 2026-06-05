@@ -27,11 +27,18 @@ static void expander_init() {
         Serial.println("XCA9554 expander not found!");
         return;
     }
-    expander.pinMode(4, OUTPUT);
-    expander.pinMode(5, OUTPUT);
-    expander.digitalWrite(4, 1);
-    expander.digitalWrite(5, 1);
+    expander.pinMode(TCA_DISP_TOUCH_P4, OUTPUT);
+    expander.pinMode(TCA_DISP_TOUCH_P5, OUTPUT);
+    expander.digitalWrite(TCA_DISP_TOUCH_P4, 1);
+    expander.digitalWrite(TCA_DISP_TOUCH_P5, 1);
+    // PA amp enable — start LOW (muted) until audio_init() enables it
+    expander.pinMode(TCA_PA_CTRL, OUTPUT);
+    expander.digitalWrite(TCA_PA_CTRL, 0);
     delay(500);
+}
+
+void display_pa_enable(bool enable) {
+    expander.digitalWrite(TCA_PA_CTRL, enable ? 1 : 0);
 }
 
 void display_init() {

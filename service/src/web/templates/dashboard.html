@@ -24,7 +24,15 @@
     <!-- Header -->
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold">💡 Meeting Light</h1>
-      <span class="text-sm text-gray-400" id="last-updated"></span>
+      <div class="flex items-center gap-3">
+        <button onclick="toggleMute()" id="mute-btn"
+          class="text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+          title="Mute/unmute device sounds">
+          <span id="mute-icon">🔊</span>
+          <span id="mute-label">Sound</span>
+        </button>
+        <span class="text-sm text-gray-400" id="last-updated"></span>
+      </div>
     </div>
 
     <!-- Status Card (refreshed by the JS poll loop) -->
@@ -268,22 +276,19 @@
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="text-sm text-gray-400 block mb-1">Business Hours Start</label>
-              <input type="number" name="business_hours_start" min="0" max="23"
-                     value="{{ settings.business_hours_start }}"
-                     class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
+              <select name="business_hours_start" id="biz-start"
+                      class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm"></select>
             </div>
             <div>
               <label class="text-sm text-gray-400 block mb-1">Business Hours End</label>
-              <input type="number" name="business_hours_end" min="1" max="24"
-                     value="{{ settings.business_hours_end }}"
-                     class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
+              <select name="business_hours_end" id="biz-end"
+                      class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm"></select>
             </div>
           </div>
           <div class="mt-3">
             <label class="text-sm text-gray-400 block mb-1">Timezone</label>
-            <input type="text" name="timezone" value="{{ settings.timezone }}"
-                   placeholder="America/New_York"
-                   class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
+            <select name="timezone" id="timezone-select"
+                    class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm"></select>
           </div>
         </div>
 
@@ -353,6 +358,26 @@
   </div>
 
   <script>
+    let deviceMuted = false;
+
+    async function toggleMute() {
+      const resp = await fetch('/api/mute', { method: 'POST' });
+      const data = await resp.json();
+      deviceMuted = data.muted;
+      updateMuteUI();
+    }
+
+    function updateMuteUI() {
+      document.getElementById('mute-icon').textContent = deviceMuted ? '🔇' : '🔊';
+      document.getElementById('mute-label').textContent = deviceMuted ? 'Muted' : 'Sound';
+      const btn = document.getElementById('mute-btn');
+      btn.classList.toggle('bg-red-900', deviceMuted);
+      btn.classList.toggle('bg-gray-700', !deviceMuted);
+    }
+
+    // Sync mute state on load
+    fetch('/api/mute').then(r => r.json()).then(d => { deviceMuted = d.muted; updateMuteUI(); });
+
     function getDuration() {
       const val = document.getElementById('duration').value;
       return val ? parseInt(val) : null;
@@ -545,6 +570,79 @@
       setTimeout(() => saved.classList.add('hidden'), 3000);
       refreshStatus();
     }
+
+    // ── Business hours dropdowns (half-hour increments, 12h format) ──────────
+    function buildTimeSelect(id, currentVal) {
+      const sel = document.getElementById(id);
+      for (let h = 0; h < 24; h++) {
+        for (let m of [0, 30]) {
+          const val = h + m / 60;
+          const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+          const ampm = h < 12 ? 'AM' : 'PM';
+          const label = `${h12}:${m.toString().padStart(2, '0')} ${ampm}`;
+          const opt = new Option(label, val);
+          if (Math.abs(val - currentVal) < 0.01) opt.selected = true;
+          sel.appendChild(opt);
+        }
+      }
+    }
+    buildTimeSelect('biz-start', {{ settings.business_hours_start }});
+    buildTimeSelect('biz-end',   {{ settings.business_hours_end }});
+
+    // ── Timezone dropdown ─────────────────────────────────────────────────────
+    const TIMEZONES = [
+      ['── United States ──', null],
+      ['Eastern Time (New York)',    'America/New_York'],
+      ['Central Time (Chicago)',     'America/Chicago'],
+      ['Mountain Time (Denver)',     'America/Denver'],
+      ['Mountain Time – no DST (Phoenix)', 'America/Phoenix'],
+      ['Pacific Time (Los Angeles)', 'America/Los_Angeles'],
+      ['Alaska Time (Anchorage)',    'America/Anchorage'],
+      ['Hawaii Time (Honolulu)',     'Pacific/Honolulu'],
+      ['── Canada ──', null],
+      ['Atlantic Time (Halifax)',    'America/Halifax'],
+      ['Eastern Time (Toronto)',     'America/Toronto'],
+      ['Central Time (Winnipeg)',    'America/Winnipeg'],
+      ['Pacific Time (Vancouver)',   'America/Vancouver'],
+      ['── Europe ──', null],
+      ['UTC',                        'UTC'],
+      ['London / Dublin',            'Europe/London'],
+      ['Amsterdam / Berlin / Paris', 'Europe/Amsterdam'],
+      ['Helsinki / Kyiv',            'Europe/Helsinki'],
+      ['Moscow',                     'Europe/Moscow'],
+      ['── Asia ──', null],
+      ['Dubai',                      'Asia/Dubai'],
+      ['Kolkata (India)',            'Asia/Kolkata'],
+      ['Bangkok / Jakarta',          'Asia/Bangkok'],
+      ['Shanghai / Hong Kong',       'Asia/Shanghai'],
+      ['Tokyo',                      'Asia/Tokyo'],
+      ['Seoul',                      'Asia/Seoul'],
+      ['── Pacific ──', null],
+      ['Sydney',                     'Australia/Sydney'],
+      ['Melbourne',                  'Australia/Melbourne'],
+      ['Auckland',                   'Pacific/Auckland'],
+    ];
+    (function() {
+      const sel = document.getElementById('timezone-select');
+      const current = '{{ settings.timezone }}';
+      let matched = false;
+      for (const [label, value] of TIMEZONES) {
+        if (value === null) {
+          const og = document.createElement('optgroup');
+          og.label = label;
+          sel.appendChild(og);
+        } else {
+          const opt = new Option(label, value);
+          if (value === current) { opt.selected = true; matched = true; }
+          sel.appendChild(opt);
+        }
+      }
+      // If the stored timezone isn't in our list, prepend it as an option
+      if (!matched && current) {
+        const opt = new Option(current, current, true, true);
+        sel.insertBefore(opt, sel.firstChild);
+      }
+    })();
 
     function updateCalendarFields() {
       const provider = document.getElementById('calendar-provider-select').value;

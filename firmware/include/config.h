@@ -29,6 +29,17 @@
 #define TCA_DISP_TOUCH_P4  4
 #define TCA_DISP_TOUCH_P5  5
 
+// --- I2S / ES8311 Audio ---
+// Verified against Waveshare ESP32-C6-Touch-AMOLED-1.8 official pin_config.h
+#define I2S_MCLK   19
+#define I2S_BCLK   20
+#define I2S_WS     22
+#define I2S_DOUT   23   // Data out ESP32→codec (speaker)
+#define I2S_DIN    21   // Data in codec→ESP32 (mic, unused)
+// PA amp enable is TCA9554 IO expander pin P7, not a direct GPIO
+#define TCA_PA_CTRL  7
+// ADDR_ES8311 (0x18) already defined above
+
 // --- Buttons ---
 #define BTN_BOOT   9   // Active LOW, strapping pin
 
@@ -54,6 +65,7 @@
 #define OP_SET_BRIGHTNESS  0x08
 #define OP_PING            0x09
 #define OP_SET_ICON_TEXT   0x0A  // [icon_id][r][g][b][text...]
+#define OP_SET_MUTE        0x0B  // [0=unmute, 1=mute]
 
 // --- Display States ---
 enum DisplayState : uint8_t {

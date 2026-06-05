@@ -3,6 +3,7 @@
 #include "display.h"
 #include "power.h"
 #include "state.h"
+#include "audio.h"
 #include <NimBLEDevice.h>
 
 static NimBLEServer* pServer = nullptr;
@@ -146,6 +147,13 @@ class StateCommandCallback : public NimBLECharacteristicCallbacks {
 
             case OP_PING: {
                 send_status_notify();
+                break;
+            }
+
+            case OP_SET_MUTE: {
+                if (len < 2) break;
+                audio_set_mute(data[1] != 0);
+                Serial.printf("BLE: mute %s\n", data[1] ? "on" : "off");
                 break;
             }
         }

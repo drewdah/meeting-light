@@ -85,7 +85,8 @@ class StateMachine:
             return False
         start = settings_store.get("business_hours_start", settings.business_hours_start)
         end = settings_store.get("business_hours_end", settings.business_hours_end)
-        return start <= now.hour < end
+        now_frac = now.hour + now.minute / 60
+        return start <= now_frac < end
 
     def _compute_state(self) -> tuple[DisplayState, Optional[CustomPayload], str]:
         """Compute the current effective state with priority."""

@@ -20,8 +20,8 @@ class Settings(BaseSettings):
     google_client_secret: str = Field(default="")
 
     # Schedule
-    business_hours_start: int = Field(default=9, description="Business hours start (24h)")
-    business_hours_end: int = Field(default=17, description="Business hours end (24h)")
+    business_hours_start: float = Field(default=9.0, description="Business hours start (fractional 24h, e.g. 8.5 = 8:30 AM)")
+    business_hours_end: float = Field(default=17.0, description="Business hours end (fractional 24h, e.g. 17.5 = 5:30 PM)")
     business_days: list[int] = Field(default=[0, 1, 2, 3, 4], description="0=Mon, 6=Sun")
     timezone: str = Field(default="America/New_York")
 

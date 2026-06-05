@@ -35,16 +35,10 @@ OP_IMAGE_END       = 0x07
 OP_SET_BRIGHTNESS  = 0x08
 OP_PING            = 0x09
 OP_SET_ICON_TEXT   = 0x0A
+OP_SET_MUTE        = 0x0B
 
 RECONNECT_INTERVAL = 3  # seconds between reconnect attempts
 KEEPALIVE_INTERVAL = 30  # seconds between pings when idle
-
-# Preset state rendering config: (emoji, text, bg_r, bg_g, bg_b)
-_PRESET_CONFIG = {
-    DisplayState.IN_MEETING: ("🔴", "In a\nMeeting",      200, 20,  20),
-    DisplayState.WFH:        ("🏠", "Working\nFrom Home",  10,  30, 120),
-    DisplayState.OOF:        ("✈️", "Out of\nOffice",      60,  0,  120),
-}
 
 
 class BLEClient:
@@ -179,16 +173,8 @@ class BLEClient:
                 logger.info("Sent: PRESET OFF")
 
             elif state in (DisplayState.IN_MEETING, DisplayState.WFH, DisplayState.OOF):
-                preset_payload = _PRESET_CONFIG.get(state)
-                if preset_payload:
-                    emoji, text, bg_r, bg_g, bg_b = preset_payload
-                    fake_custom = CustomPayload(text=text, r=bg_r, g=bg_g, b=bg_b,
-                                                emoji=emoji, fg_r=-1, fg_g=-1, fg_b=-1)
-                    await self._send_screen_image(client, fake_custom)
-                    logger.info(f"Sent: PRESET {state.name} as image")
-                else:
-                    await self._write(client, [OP_SET_PRESET, int(state)])
-                    logger.info(f"Sent: PRESET {state.name}")
+                await self._write(client, [OP_SET_PRESET, int(state)])
+                logger.info(f"Sent: PRESET {state.name}")
 
         except Exception as e:
             msg = str(e)
@@ -266,6 +252,11 @@ class BLEClient:
             logger.info(f"Sent: SET_BRIGHTNESS {level}")
         else:
             logger.info(f"BLE not connected — brightness {level} will apply on next connect")
+
+    async def set_mute(self, muted: bool):
+        if self._client and self._client.is_connected and self._cmd_char:
+            await self._write(self._client, [OP_SET_MUTE, 1 if muted else 0])
+            logger.info(f"Sent: SET_MUTE {'on' if muted else 'off'}")
 
     async def force_reconnect(self):
         """Force disconnect — connection loop will reconnect automatically."""

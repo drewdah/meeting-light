@@ -214,6 +214,20 @@ async def ble_reconnect():
     return {"ok": True}
 
 
+_device_muted = False
+
+@app.post("/api/mute")
+async def toggle_mute():
+    global _device_muted
+    _device_muted = not _device_muted
+    await ble_client.set_mute(_device_muted)
+    return {"muted": _device_muted}
+
+@app.get("/api/mute")
+async def get_mute():
+    return {"muted": _device_muted}
+
+
 @app.get("/api/settings")
 async def get_settings():
     return settings_store.all_settings()
@@ -221,8 +235,8 @@ async def get_settings():
 
 @app.post("/api/settings")
 async def update_settings(
-    business_hours_start: int = Form(...),
-    business_hours_end: int = Form(...),
+    business_hours_start: float = Form(...),
+    business_hours_end: float = Form(...),
     timezone: str = Form(...),
     esp32_mac_address: str = Form(...),
     graph_poll_interval_seconds: int = Form(...),
