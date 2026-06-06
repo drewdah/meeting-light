@@ -57,11 +57,24 @@ The device has two buttons — **BOOT** (side) and **PWR** (side):
 | Tap BOOT | Cycle through Off → In a Meeting → WFH → Out of Office |
 | Hold BOOT 3s | Reboot device |
 
+## Enclosure
+
+A two-piece 3D-printed case (designed in Fusion 360). Print files are in `enclosure/`:
+`MeetingLight-Enclosure.3mf` (both parts, ready to import into Bambu Studio / PrusaSlicer) and individual STLs in `enclosure/stl/`.
+
+- **Front Lid** — holds the screen and PIR sensor, and frames a paper name-plate insert. The display window is a **flush recess** so the raised cover glass sits level with the front face; a small countersunk aperture exposes the PIR's field of view without a large hole.
+- **Back Tray** — holds the LiPo battery (retained by mid-edge ribs that keep the corners clear for the battery's JST wire) and mounts to a window with a command strip.
+- **Joint** — the lid presses onto the tray with a self-aligning rabbet lip and snap-in detents (bumps on the lid that click into pockets in the tray walls). No screws; pops off by hand for battery swaps.
+- **Overall size** — ~202 × 50 × 17 mm.
+
+**Printing:** orient each part **standing on its end (long axis vertical)** to print without supports — the rabbet, pockets, and screen recess are all designed for that orientation. PLA/PETG, 0.2 mm layers. Detent strength is tunable: if the lid is too stiff or too loose, adjust the bump height slightly and re-export.
+
 ## Project Structure
 
 ```
 firmware/       # ESP32-C6 firmware (PlatformIO + Arduino)
 service/        # Mini PC service (Python + FastAPI + Docker)
+enclosure/      # 3D-printed two-piece case (STL + 3MF, designed in Fusion 360)
 docs/           # Architecture plan and documentation
 ```
 
