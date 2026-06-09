@@ -76,6 +76,13 @@ void power_enable_display_rail() {
 void power_enter_deep_sleep() {
     if (!pmu_ok) return;
 
+    // Stay awake when powered via USB — supports development and prevents sleeping
+    // while charging. Deep sleep only engages on battery power.
+    if (pmu.isVbusIn()) {
+        Serial.println("USB power detected — skipping deep sleep");
+        return;
+    }
+
     // Disable display and audio rails
     pmu.disableBLDO1();
     pmu.disableBLDO2();
@@ -84,13 +91,19 @@ void power_enter_deep_sleep() {
     pmu.disableALDO3();
     pmu.disableALDO4();
 
-    // Configure BOOT button (GPIO 9) as wakeup source
-    esp_sleep_enable_ext1_wakeup(1ULL << BTN_BOOT, ESP_EXT1_WAKEUP_ANY_LOW);
+    // ESP32-C6: deep-sleep GPIO wakeup requires LP GPIOs (0-7 only).
+    // GPIO 9 (BTN_BOOT) and GPIO 15 (TOUCH_INT) are HP GPIOs — they cannot
+    // trigger wakeup via ext0/ext1/esp_deep_sleep_enable_gpio_wakeup.
+    // All LP GPIOs are consumed by the QSPI display bus (0-5) and I2C (7-8).
+    //
+    // Strategy: periodic timer wake. The device wakes every N minutes, shows the
+    // "Waiting to Connect" screen, advertises BLE for 30s, then sleeps again.
+    // Press the hardware RESET (EN) button for an immediate wake at any time.
+    //
+    // Wake every 2 minutes to advertise and check for a BLE connection
+    esp_sleep_enable_timer_wakeup(2UL * 60 * 1000000);
 
-    // Safety timer: wake after 8 hours regardless
-    esp_sleep_enable_timer_wakeup(8ULL * 3600 * 1000000);
-
-    Serial.println("Entering deep sleep");
+    Serial.println("Entering deep sleep (timer wake in 2 min)");
     Serial.flush();
 
     esp_deep_sleep_start();

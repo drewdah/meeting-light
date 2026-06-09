@@ -49,7 +49,7 @@ void display_init() {
         LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3
     );
 
-    gfx = new Arduino_SH8601(bus, GFX_NOT_DEFINED, 0 /* rotation */,
+    gfx = new Arduino_SH8601(bus, GFX_NOT_DEFINED, 2 /* 180° rotation — buttons on left */,
                               (uint16_t)LCD_WIDTH, (uint16_t)LCD_HEIGHT);
 
     if (!gfx->begin()) {
@@ -261,6 +261,14 @@ void display_show_image(const uint8_t* jpeg_data, size_t jpeg_len) {
     } else {
         Serial.println("JPEG open failed");
     }
+}
+
+// Show "Waiting to Connect" screen with BT logo and MAC address.
+// Icon ICON_ID_BLUETOOTH (id 4) is the Bluetooth logo from icon_data.h.
+void display_show_waiting(const char* mac) {
+    char buf[48];
+    snprintf(buf, sizeof(buf), "Waiting to Connect\n\n%s", mac);
+    display_show_icon_text(ICON_ID_BLUETOOTH, buf, 0, 0, 0); // black bg → white text
 }
 
 void display_set_brightness(uint8_t level) {

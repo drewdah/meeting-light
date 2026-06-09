@@ -14,15 +14,15 @@ OUTPUT = os.path.join(os.path.dirname(__file__), "../include/icon_data.h")
 
 # Icon set: (id, name, emoji_char, fallback_color)
 ICONS = [
-    (0, "NONE",     None,  None),          # No icon — text only
-    (1, "MEETING",  "🔴",  (220, 38, 38)), # Red circle
-    (2, "WFH",      "🏠",  (37, 99, 235)), # House
-    (3, "OOF",      "✈️",  (124, 58, 237)), # Plane
-    (4, "LUNCH",    "🍕",  (234, 88, 12)), # Pizza
-    (5, "FOCUS",    "🎧",  (16, 185, 129)), # Headphones
-    (6, "BACK",     "⏰",  (245, 158, 11)), # Clock
-    (7, "BUSY",     "🚫",  (239, 68, 68)), # No entry
+    (0, "NONE",      None,  None),          # No icon — text only
+    (1, "MEETING",   "🔴",  (220, 38, 38)), # Red circle
+    (2, "WFH",       "🏠",  (37, 99, 235)), # House
+    (3, "OOF",       "✈️",  (124, 58, 237)), # Plane
+    (4, "BLUETOOTH", None,  None, "icons/bluetooth.png"),  # Loaded from PNG file
 ]
+
+# Icon entries may optionally have a 5th element: path to a PNG file (relative to this script).
+# When present, the PNG is loaded and resized instead of rendering an emoji.
 
 def find_emoji_font(size):
     """Try to find a font that renders emoji."""
@@ -116,8 +116,28 @@ def main():
     ]
 
     icon_names = []
-    for icon_id, name, emoji, fallback in ICONS:
-        if emoji is None:
+    script_dir = os.path.dirname(__file__)
+    for entry in ICONS:
+        icon_id, name, emoji, fallback = entry[:4]
+        png_path = entry[4] if len(entry) > 4 else None
+
+        if png_path is not None:
+            # Load icon from PNG file
+            full_path = os.path.join(script_dir, png_path)
+            if not os.path.exists(full_path):
+                print(f"  ERROR: PNG not found for {name}: {full_path}")
+                print(f"  Place your Bluetooth logo at: {full_path}")
+                sys.exit(1)
+            print(f"  Loading icon {icon_id}: {name} from {png_path}")
+            src = Image.open(full_path).convert("RGBA")
+            # Fit within ICON_SIZE x ICON_SIZE preserving aspect ratio, center on black square
+            src.thumbnail((ICON_SIZE, ICON_SIZE), Image.LANCZOS)
+            canvas = Image.new("RGBA", (ICON_SIZE, ICON_SIZE), (0, 0, 0, 0))
+            offset = ((ICON_SIZE - src.width) // 2, (ICON_SIZE - src.height) // 2)
+            canvas.paste(src, offset, src)
+            img = canvas
+            data = rgba_to_rgb565(img, bg=(0, 0, 0))
+        elif emoji is None:
             # NONE icon — all zeros (not used for drawing)
             data = bytes(ICON_SIZE * ICON_SIZE * 2)
         else:

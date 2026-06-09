@@ -23,6 +23,26 @@ static bool safe_mode = false;
 static unsigned long boot_ok_start = 0;
 static bool audio_status_logged = false;
 
+// Boot phase: track splash → waiting → done transition
+enum BootPhase { BOOT_SPLASH, BOOT_WAITING, BOOT_DONE };
+static BootPhase boot_phase = BOOT_DONE;
+static unsigned long splash_start = 0;
+
+// Apply the saved NVS state to the display (used when exiting boot phases)
+static void show_saved_state() {
+    DisplayState saved = state_get_current();
+    if (saved == STATE_OFF) {
+        display_off();
+    } else if (saved == STATE_IN_MEETING || saved == STATE_WFH || saved == STATE_OOF) {
+        display_on();
+        display_show_preset(saved);
+    } else {
+        // CUSTOM_TEXT / CUSTOM_IMAGE: payload isn't persisted locally —
+        // just turn the display on and wait for the app to push the content.
+        display_on();
+    }
+}
+
 static unsigned long last_battery_report = 0;
 static const DisplayState PRESET_CYCLE[] = {
     STATE_OFF, STATE_IN_MEETING, STATE_WFH, STATE_OOF
@@ -88,9 +108,12 @@ void setup() {
         return;
     }
 
-    // Check wake reason
+    // Check wake reason — timer wakes skip the splash/chime and go straight to connect screen
     esp_sleep_wakeup_cause_t wakeup = esp_sleep_get_wakeup_cause();
-    if (wakeup != ESP_SLEEP_WAKEUP_UNDEFINED) {
+    bool from_timer_wake = (wakeup == ESP_SLEEP_WAKEUP_TIMER);
+    if (from_timer_wake) {
+        Serial.println("Woke from periodic deep sleep timer");
+    } else if (wakeup != ESP_SLEEP_WAKEUP_UNDEFINED) {
         Serial.printf("Woke from deep sleep, cause: %d\n", wakeup);
     }
 
@@ -105,11 +128,7 @@ void setup() {
 
     buttons_on_boot_press(on_boot_button);
 
-    display_show_boot_splash();
-    audio_play_boot_chime();
-
-    // Restore saved state in NVS so button cycling and BLE stay in sync,
-    // but don't re-render locally — the service pushes the correct JPEG on connect.
+    // Restore cycle_index so button cycling and BLE stay in sync.
     DisplayState saved = state_get_current();
     for (uint8_t i = 0; i < PRESET_COUNT; i++) {
         if (PRESET_CYCLE[i] == saved) {
@@ -117,9 +136,20 @@ void setup() {
             break;
         }
     }
-    if (saved == STATE_OFF) {
-        display_off();
+
+    if (from_timer_wake) {
+        // Periodic timer wake: skip splash and chime, go straight to connect screen.
+        // This avoids playing audio every N minutes and makes the wake faster.
+        String mac = ble_get_mac_address();
+        display_show_waiting(mac.c_str());
+        boot_phase = BOOT_WAITING;
+    } else {
+        // Fresh boot or hardware reset: full splash + chime sequence.
+        display_show_boot_splash();
+        audio_play_boot_chime();
+        boot_phase = BOOT_SPLASH;
     }
+    splash_start = millis();
 
     Serial.printf("Ready. State: %d, Battery: %d%% (%dmV)\n",
                   saved, power_get_battery_percent(), power_get_battery_mv());
@@ -132,6 +162,42 @@ void loop() {
         // Hold BOOT 3s still works via hardware reset; just idle here
         delay(100);
         return;
+    }
+
+    // Boot-phase sequencing: splash (5s) → waiting-to-connect → done
+    if (boot_phase != BOOT_DONE) {
+        bool connected_now = ble_is_connected();
+
+        if (boot_phase == BOOT_SPLASH) {
+            if (connected_now) {
+                // Connected during splash — skip waiting screen, show saved state
+                show_saved_state();
+                boot_phase = BOOT_DONE;
+            } else if (millis() - splash_start >= 5000) {
+                // 5s elapsed, not yet connected — show waiting screen
+                String mac = ble_get_mac_address();
+                display_show_waiting(mac.c_str());
+                boot_phase = BOOT_WAITING;
+            }
+        } else if (boot_phase == BOOT_WAITING) {
+            if (connected_now) {
+                // BLE connected while waiting — show saved state
+                show_saved_state();
+                boot_phase = BOOT_DONE;
+            } else if (millis() - splash_start >= 30UL * 1000UL) {
+                if (power_is_vbus_in()) {
+                    // USB plugged in — stay awake indefinitely, keep the connect screen visible
+                    splash_start = millis();
+                } else {
+                    // Battery only — sleep and retry on next timer wake (every 2 min)
+                    Serial.println("No BLE connection — sleeping, will retry on timer wake");
+                    state_set(STATE_OFF);
+                    display_off();
+                    power_enter_deep_sleep();
+                    return;
+                }
+            }
+        }
     }
 
     // Clear crash counter once we've been running cleanly long enough

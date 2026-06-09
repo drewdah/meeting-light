@@ -182,6 +182,16 @@ void ble_init() {
     NimBLEDevice::setMTU(512);
     NimBLEDevice::setPower(ESP_PWR_LVL_P3); // +3 dBm
 
+    // Append last 2 MAC bytes so each unit is distinguishable: "MeetingLight-XXXX"
+    {
+        NimBLEAddress addr = NimBLEDevice::getAddress();
+        const uint8_t* raw = addr.getVal();  // 6 bytes, index 5 = most significant
+        char suffix[16];
+        snprintf(suffix, sizeof(suffix), "%s-%02X%02X", BLE_DEVICE_NAME, raw[1], raw[0]);
+        NimBLEDevice::setDeviceName(suffix);
+        Serial.printf("BLE: device name set to %s\n", suffix);
+    }
+
     pServer = NimBLEDevice::createServer();
     pServer->setCallbacks(new ServerCallbacks());
 
@@ -237,6 +247,14 @@ void ble_notify_status(DisplayState state, uint8_t battery_pct, bool charging, u
 
 bool ble_is_connected() {
     return connected;
+}
+
+String ble_get_mac_address() {
+    // Returns uppercase MAC, e.g. "AA:BB:CC:DD:EE:FF"
+    std::string addr = NimBLEDevice::getAddress().toString();
+    String s = String(addr.c_str());
+    s.toUpperCase();
+    return s;
 }
 
 const uint8_t* ble_get_image_data() { return img_buffer; }

@@ -81,13 +81,15 @@ class BLEClient:
     async def _connect_and_run(self):
         mac = settings_store_get_mac()
         if not mac:
-            logger.info("No ESP32 MAC configured, scanning for 'MeetingLight'...")
-            device = await BleakScanner.find_device_by_name("MeetingLight", timeout=10)
+            logger.info("No ESP32 MAC configured, scanning for 'MeetingLight' (prefix)...")
+            # Use prefix match so suffixed names ("MeetingLight-XXXX") are discovered
+            devices = await BleakScanner.discover(timeout=10)
+            device = next((d for d in devices if (d.name or "").startswith("MeetingLight")), None)
             if not device:
-                logger.warning("MeetingLight device not found")
+                logger.warning("No MeetingLight device found during scan")
                 return
             mac = device.address
-            logger.info(f"Found MeetingLight at {mac}")
+            logger.info(f"Found {device.name} at {mac}")
 
         logger.info(f"Connecting to {mac}...")
         async with BleakClient(mac, disconnected_callback=self._on_disconnect) as client:

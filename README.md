@@ -26,6 +26,9 @@ ESP32-C6 AMOLED  <──BLE──>  Mini PC Service  <──Graph API──>  Mi
 - **Override expiry** — set duration (30 min, 1 hr, end of day, etc.) before reverting to calendar state
 - **Boot button controls** — tap to cycle through preset states; hold 3 seconds to reboot
 - **Boot splash** — shows a 💡 Meeting Light logo on startup while connecting to the service
+- **Waiting to Connect screen** — after the splash, shows a Bluetooth logo and the device's BLE MAC address so multiple units can be identified and configured
+- **Per-device BLE name** — each device advertises as `MeetingLight-XXXX` (last 2 MAC bytes) for easy identification in BLE scanners and the service UI
+- **Battery-safe deep sleep** — on battery power, sleeps and wakes every 2 minutes to advertise; never sleeps when USB is connected
 - **Business hours scheduling** — device sleeps outside M–F 9–5; configurable in the web UI
 - **Power monitoring** — live battery %, voltage, charging state, and USB power detection reported via BLE; dashboard shows USB Powered, Charging, or battery % as appropriate
 - **Brightness control** — adjustable in Settings, applied immediately to the device
@@ -46,7 +49,7 @@ ESP32-C6 AMOLED  <──BLE──>  Mini PC Service  <──Graph API──>  Mi
 
 - [Waveshare ESP32-C6 Touch AMOLED 1.8"](https://www.waveshare.com/esp32-c6-touch-amoled-1.8.htm) — 368×448 AMOLED, BLE 5, two hardware buttons, LiPo connector
 - Always-on mini PC at desk (Raspberry Pi, mini PC, etc.)
-- LiPo battery (~1000mAh+), swappable; device sleeps outside business hours
+- 3000mAh LiPo battery, swappable; device deep-sleeps and wakes every 2 minutes to check for a connection
 
 ### Button Controls
 
@@ -195,12 +198,14 @@ On first run, visit the URL shown in the web UI and enter the code to authentica
 
 ### Finding Your ESP32 MAC Address
 
-Run the BLE scanner to find the device address:
+Power on the device — after the boot splash it shows a **"Waiting to Connect"** screen with the Bluetooth logo and the full MAC address (e.g. `FC:01:2C:FD:DD:E0`). Read it directly off the screen.
+
+Alternatively, run the BLE scanner:
 ```bash
 cd service
 python scan.py
 ```
-The ESP32 will appear as `MeetingLight` or as the closest unnamed device. Set `ESP32_MAC_ADDRESS` in `.env`.
+The device advertises as `MeetingLight-XXXX` (last 2 MAC bytes). Set `ESP32_MAC_ADDRESS` in `.env`, or enter it in the web UI under ⚙️ Settings and click **↺ Reconnect**. The service will also auto-discover any `MeetingLight-XXXX` device if no MAC is configured.
 
 ## Configuration
 
@@ -221,4 +226,4 @@ All settings are configurable in the web UI under ⚙️ Settings:
 - **Image transfer**: Service renders full 368×448 JPEG using Pillow (Segoe UI Emoji on Windows), transfers in ~490-byte acknowledged BLE chunks
 - **Preset images**: In a Meeting, WFH, OOF, and the boot splash are pre-compiled as JPEG byte arrays in firmware (`preset_images.h`, `boot_splash.h`). The boot button cycles through these instantly with no BLE transfer. Re-run the generator scripts and reflash to update them.
 - **BLE**: NimBLE peripheral on ESP32, bleak central on mini PC. Custom GATT service with state command + device status characteristics
-- **Power**: AXP2101 PMIC reports battery %, voltage, charging state, and USB/VBUS presence over BLE. AMOLED with mostly-dark backgrounds; device deep-sleeps outside business hours. Target ~1 week battery life with 1000mAh LiPo
+- **Power**: AXP2101 PMIC reports battery %, voltage, charging state, and USB/VBUS presence over BLE. AMOLED with mostly-dark backgrounds; device deep-sleeps and wakes every 2 minutes to advertise BLE. Deep sleep is skipped entirely when USB power is connected (VBUS detected). Hardware note: GPIO wakeup from deep sleep requires LP GPIOs (0–7) on ESP32-C6 — all are consumed by the display bus and I2C, so only RTC timer wakeup is available.
