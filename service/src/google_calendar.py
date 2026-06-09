@@ -64,10 +64,11 @@ class GoogleCalendarProvider(CalendarProvider):
     # ── Auth flow ─────────────────────────────────────────────────────────────
 
     def _client_id(self):
-        return settings_store.get("google_client_id", settings.google_client_id)
+        # Prefer a non-empty settings.json override, else the baked-in default (config/.env).
+        return settings_store.get("google_client_id") or settings.google_client_id
 
     def _client_secret(self):
-        return settings_store.get("google_client_secret", settings.google_client_secret)
+        return settings_store.get("google_client_secret") or settings.google_client_secret
 
     async def start_auth_flow(self) -> dict:
         async with aiohttp.ClientSession() as s:

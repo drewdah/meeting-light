@@ -221,29 +221,10 @@
             <div>
               <label class="text-sm text-gray-400 block mb-1">Provider</label>
               <select name="calendar_provider" id="calendar-provider-select"
-                      onchange="updateCalendarFields()"
                       class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm">
                 <option value="microsoft" {{ 'selected' if settings.calendar_provider == 'microsoft' }}>Microsoft 365 / Outlook</option>
                 <option value="google" {{ 'selected' if settings.calendar_provider == 'google' }}>Google Calendar</option>
               </select>
-            </div>
-
-            <!-- Google-only fields -->
-            <div id="google-fields" class="{{ '' if settings.calendar_provider == 'google' else 'hidden' }} space-y-3">
-              <div>
-                <label class="text-sm text-gray-400 block mb-1">Google Client ID</label>
-                <input type="text" name="google_client_id"
-                       value="{{ settings.google_client_id }}"
-                       placeholder="xxxxxx.apps.googleusercontent.com"
-                       class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm font-mono">
-              </div>
-              <div>
-                <label class="text-sm text-gray-400 block mb-1">Google Client Secret</label>
-                <input type="password" name="google_client_secret"
-                       value="{{ settings.google_client_secret }}"
-                       placeholder="GOCSPX-..."
-                       class="w-full bg-gray-700 text-white rounded px-3 py-2 text-sm font-mono">
-              </div>
             </div>
 
             <!-- Auth status + sign-in -->
@@ -656,11 +637,6 @@
         sel.insertBefore(opt, sel.firstChild);
       }
     })();
-
-    function updateCalendarFields() {
-      const provider = document.getElementById('calendar-provider-select').value;
-      document.getElementById('google-fields').classList.toggle('hidden', provider !== 'google');
-    }
 
     async function startCalendarAuth() {
       // Save settings first so credentials are available

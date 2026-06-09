@@ -119,17 +119,17 @@ cd service
 cp .env.example .env
 ```
 
-Open `.env` and set at minimum:
+Open `.env` and fill in your values — everything here is passed as environment variables to the container by `docker-compose`:
 
-| Variable | Description |
-|----------|-------------|
-| `ESP32_MAC_ADDRESS` | BLE MAC of your device (see *Finding Your ESP32 MAC Address* below) |
-| `CALENDAR_PROVIDER` | `microsoft` or `google` |
-| `MS_GRAPH_CLIENT_ID` | Azure app client ID (Microsoft only) |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | OAuth credentials (Google only) |
-| `TIMEZONE` | Your local IANA timezone, e.g. `America/New_York` |
-
-OAuth client credentials (client ID and secret) live in `.env` only — they are never entered through the web UI.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ESP32_MAC_ADDRESS` | Always | BLE MAC of your device (see *Finding Your ESP32 MAC Address* below) |
+| `CALENDAR_PROVIDER` | Always | `microsoft` (default) or `google` |
+| `MS_GRAPH_CLIENT_ID` | Microsoft | Azure public-client app ID — see *One-time provider setup* |
+| `MS_GRAPH_TENANT_ID` | Microsoft | `organizations` for work/school accounts (default) |
+| `GOOGLE_CLIENT_ID` | Google | OAuth client ID from Google Cloud — see *One-time provider setup* |
+| `GOOGLE_CLIENT_SECRET` | Google | OAuth client secret (confidential — never commit) |
+| `TIMEZONE` | Optional | IANA timezone, e.g. `America/New_York` |
 
 #### 2. Create a virtual environment and install dependencies
 
@@ -174,27 +174,41 @@ The same `.env` file is used; Docker Compose passes it through automatically.
 
 Set `CALENDAR_PROVIDER=microsoft` (default) or `CALENDAR_PROVIDER=google` in `.env`.
 
-### Microsoft Graph App Registration
+The app is pre-registered for both providers — each deployer just picks a provider and
+signs in; there's no cloud console work per deployment. Each person authenticates with
+their own Microsoft/Google account via the sign-in flow in the web UI.
 
-1. Go to [portal.azure.com](https://portal.azure.com) → Azure Active Directory → App registrations → New registration
-2. Set as a **Public client / native app**
-3. Add delegated permissions: `Calendars.Read`, `Presence.Read`, `User.Read`, `MailboxSettings.Read`
-4. Copy the **Application (client) ID** into `.env` as `MS_GRAPH_CLIENT_ID`
+**What gets detected:**
+- **In a Meeting** — any busy/opaque calendar event happening right now
+- **Working From Home** — all-day WFH events (Microsoft) or [Working Location](https://support.google.com/calendar/answer/11896660) → Home Office (Google)
+- **Out of Office** — OOF events or scheduled automatic replies (Microsoft); native Out of Office events (Google)
 
-### Google Calendar App Registration
+#### Google Testing Mode limit
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com) → New project
-2. Enable the **Google Calendar API**
-3. Create credentials → **OAuth client ID** → Application type: **TV and Limited Input devices**
-4. Copy the **Client ID** and **Client Secret** into `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
-5. Set `CALENDAR_PROVIDER=google` in `.env`
+`calendar.readonly` is a Google "sensitive" scope. Until the app completes Google's
+one-time verification, it runs in **Testing mode**, which means:
+- Maximum **100 users** across all deployments (app-wide, not per host)
+- Refresh tokens **expire every 7 days** — Gmail users must re-sign-in weekly
 
-On first run, visit the URL shown in the web UI and enter the code to authenticate (same flow as Microsoft).
+Each Gmail user must be added as a test user in [Google Cloud Console → OAuth consent screen](https://console.cloud.google.com/). Microsoft 365 / Outlook has no equivalent limit.
 
-**What gets detected with Google Calendar:**
-- In a Meeting: any busy (opaque) event on your primary calendar
-- Working From Home: [Working Location](https://support.google.com/calendar/answer/11896660) events set to Home Office
-- Out of Office: native Out of Office events
+### One-time provider setup (maintainer only)
+
+Register the app once; every deployment reuses the same credentials via `.env`. Each user
+then signs in with their own account — no per-person cloud console work required.
+
+**Microsoft** — [portal.azure.com](https://portal.azure.com) → App registrations → New registration:
+- Supported account types: **Accounts in any organizational directory** (multi-tenant)
+- Platform: **Public client / native** (no redirect URI needed for device-code flow)
+- Delegated permissions: `Calendars.Read`, `Presence.Read`, `User.Read`, `MailboxSettings.Read`
+- Copy the **Application (client) ID** → `MS_GRAPH_CLIENT_ID` in `.env`
+
+**Google** — [console.cloud.google.com](https://console.cloud.google.com) → new project:
+- Enable the **Google Calendar API**
+- Credentials → OAuth client ID → type: **TV and Limited Input devices**
+- Copy the **Client ID** → `GOOGLE_CLIENT_ID` in `.env`
+- Copy the **Client Secret** → `GOOGLE_CLIENT_SECRET` in `.env` (confidential — never commit)
+- Add each Gmail user as a test user on the OAuth consent screen
 
 ### Finding Your ESP32 MAC Address
 

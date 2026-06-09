@@ -244,8 +244,6 @@ async def update_settings(
     graph_poll_interval_seconds: int = Form(...),
     default_brightness: int = Form(...),
     calendar_provider: str = Form(default="microsoft"),
-    google_client_id: str = Form(default=""),
-    google_client_secret: str = Form(default=""),
 ):
     settings_store.update({
         "business_hours_start": business_hours_start,
@@ -255,8 +253,6 @@ async def update_settings(
         "graph_poll_interval_seconds": graph_poll_interval_seconds,
         "default_brightness": default_brightness,
         "calendar_provider": calendar_provider,
-        "google_client_id": google_client_id,
-        "google_client_secret": google_client_secret,
     })
     # Push brightness to device immediately
     await ble_client.set_brightness(default_brightness)

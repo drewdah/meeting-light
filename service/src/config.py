@@ -11,11 +11,12 @@ class Settings(BaseSettings):
     # Calendar provider: "microsoft" or "google"
     calendar_provider: str = Field(default="microsoft")
 
-    # Microsoft Graph
+    # Microsoft Graph — client ID and tenant come from docker-compose.yml environment block
     ms_graph_client_id: str = Field(default="")
-    ms_graph_tenant_id: str = Field(default="common")
+    # Device-code flow is NOT supported on /common — work/school accounts require /organizations
+    ms_graph_tenant_id: str = Field(default="organizations")
 
-    # Google Calendar
+    # Google Calendar — client ID from docker-compose.yml; secret from .env only (never commit)
     google_client_id: str = Field(default="")
     google_client_secret: str = Field(default="")
 
