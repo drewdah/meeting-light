@@ -197,11 +197,24 @@ Each Gmail user must be added as a test user in [Google Cloud Console → OAuth 
 Register the app once; every deployment reuses the same credentials via `.env`. Each user
 then signs in with their own account — no per-person cloud console work required.
 
-**Microsoft** — [portal.azure.com](https://portal.azure.com) → App registrations → New registration:
-- Supported account types: **Accounts in any organizational directory** (multi-tenant)
-- Platform: **Public client / native** (no redirect URI needed for device-code flow)
-- Delegated permissions: `Calendars.Read`, `Presence.Read`, `User.Read`, `MailboxSettings.Read`
-- Copy the **Application (client) ID** → `MS_GRAPH_CLIENT_ID` in `.env`
+**Microsoft** — [portal.azure.com](https://portal.azure.com) → **Microsoft Entra ID** → **App registrations** → **New registration**:
+
+1. **Name**: anything (e.g. `Meeting Light`)
+2. **Supported account types**: choose based on your account type:
+   - Work/school (Microsoft 365): *Accounts in this organizational directory only*
+   - Personal (Outlook.com/Hotmail) or mixed: *Accounts in any organizational directory … and personal Microsoft accounts*
+3. **Redirect URI**: leave blank — click **Register**
+4. Copy the **Application (client) ID** → `MS_GRAPH_CLIENT_ID` in `.env`
+5. Go to **Authentication** (left sidebar):
+   - Click **Add a platform** → **Mobile and desktop applications**
+   - Check `https://login.microsoftonline.com/common/oauth2/nativeclient` → **Configure**
+   - Scroll down to **Advanced settings** → set **Allow public client flows** to **Yes** → **Save**
+6. Go to **API permissions** (left sidebar):
+   - Click **Add a permission** → **Microsoft Graph** → **Delegated permissions**
+   - Search and add: `Calendars.Read`, `Presence.Read`, `User.Read`, `MailboxSettings.Read`
+   - Click **Grant admin consent** if the button appears (required for org accounts)
+
+> **Tenant ID note**: the `.env` default `MS_GRAPH_TENANT_ID=organizations` works for work/school accounts. For personal Microsoft accounts change it to `common`.
 
 **Google** — [console.cloud.google.com](https://console.cloud.google.com) → new project:
 - Enable the **Google Calendar API**
