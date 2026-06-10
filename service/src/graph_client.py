@@ -195,9 +195,8 @@ class GraphClient(CalendarProvider):
                 f"/me/calendarView"
                 f"?startDateTime={now.isoformat()}&endDateTime={end.isoformat()}"
                 f"&$select=subject,start,end,showAs,isAllDay"
-                f"&$filter=showAs ne 'free'"
                 f"&$orderby=start/dateTime"
-                f"&$top=5"
+                f"&$top=8"
             ),
             self._get("/me/presence"),
         )
