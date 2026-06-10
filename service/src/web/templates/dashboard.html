@@ -88,8 +88,15 @@
 
           <div class="bg-gray-700 rounded-lg p-3">
             <div class="text-gray-400 mb-1">Calendar</div>
-            <div id="calendar-state" class="font-medium">{{ snap.calendar_label }}</div>
-            <div class="text-gray-500 text-xs">{{ 'Authenticated' if snap.authenticated else 'Not signed in' }}</div>
+            {% if snap.authenticated %}
+              <div id="cal-tile-name" class="font-medium text-sm truncate"></div>
+              <div id="cal-tile-presence" class="hidden items-center gap-1.5 mt-0.5">
+                <span id="cal-tile-dot" class="w-1.5 h-1.5 rounded-full flex-shrink-0"></span>
+                <span id="cal-tile-label" class="text-xs text-gray-400 leading-tight"></span>
+              </div>
+            {% else %}
+              <div class="font-medium text-gray-500 text-sm">Not signed in</div>
+            {% endif %}
           </div>
         </div>
 
@@ -100,20 +107,8 @@
     <!-- Calendar Info Card (only when authenticated) -->
     {% if snap.authenticated %}
     <div class="bg-gray-800 rounded-xl p-5" id="calendar-info-card">
-      <!-- User row -->
-      <div class="flex items-center justify-between mb-4">
-        <div>
-          <div id="cal-user-name" class="font-semibold text-sm"></div>
-          <div id="cal-user-email" class="text-xs text-gray-400"></div>
-        </div>
-        <div id="cal-presence" class="hidden items-center gap-2">
-          <span id="cal-presence-dot" class="w-2 h-2 rounded-full flex-shrink-0"></span>
-          <span id="cal-presence-label" class="text-xs text-gray-400"></span>
-        </div>
-      </div>
-      <!-- Upcoming events -->
+      <h2 class="font-semibold mb-4">Upcoming Calendar Events</h2>
       <div id="cal-events" class="hidden">
-        <div class="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2">Upcoming</div>
         <div id="cal-events-list" class="space-y-2"></div>
       </div>
       <div id="cal-loading" class="text-xs text-gray-600 text-center py-1">Loading…</div>
@@ -734,8 +729,8 @@
       if (!data || Object.keys(data).length === 0) return;
 
       if (data.user) {
-        document.getElementById('cal-user-name').textContent = data.user.display_name || '';
-        document.getElementById('cal-user-email').textContent = data.user.email || '';
+        const nameEl = document.getElementById('cal-tile-name');
+        if (nameEl) nameEl.textContent = data.user.display_name || '';
       }
 
       if (data.presence) {
@@ -744,10 +739,12 @@
         const WORK_LOC_LABELS = { office: '🏢 In the office', remote: '💻 Working remotely', home: '🏠 Working from home' };
         const locLabel = WORK_LOC_LABELS[data.presence.work_location] || '';
         const parts = [style.label, locLabel].filter(Boolean);
-        document.getElementById('cal-presence-dot').className = `w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`;
-        document.getElementById('cal-presence-label').textContent = parts.join(' · ');
-        document.getElementById('cal-presence').classList.remove('hidden');
-        document.getElementById('cal-presence').classList.add('flex');
+        const dotEl = document.getElementById('cal-tile-dot');
+        const labelEl = document.getElementById('cal-tile-label');
+        const presEl = document.getElementById('cal-tile-presence');
+        if (dotEl) dotEl.className = `w-1.5 h-1.5 rounded-full flex-shrink-0 ${style.dot}`;
+        if (labelEl) labelEl.textContent = parts.join(' · ');
+        if (presEl) { presEl.classList.remove('hidden'); presEl.classList.add('flex'); }
       }
 
       if (data.upcoming_events && data.upcoming_events.length > 0) {
@@ -802,7 +799,6 @@
       } else {
         lastSeen.textContent = '';
       }
-      document.getElementById('calendar-state').textContent = data.calendar_label;
       document.getElementById('last-updated').textContent = `Updated ${new Date().toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', second:'2-digit', hour12: true})}`;
     }
   </script>
