@@ -711,11 +711,11 @@
       OutOfOffice:    { dot: 'bg-purple-400', label: 'Out of office' },
     };
 
-    const SHOW_AS_COLORS = {
-      busy:             'text-red-400',
-      tentative:        'text-yellow-400',
-      oof:              'text-purple-400',
-      workingElsewhere: 'text-blue-400',
+    const SHOW_AS_STYLES = {
+      busy:             { dot: 'bg-red-400',    label: 'Busy' },
+      tentative:        { dot: 'bg-yellow-400', label: 'Tentative' },
+      oof:              { dot: 'bg-purple-400', label: 'Out of office' },
+      workingElsewhere: { dot: 'bg-blue-400',   label: 'Working elsewhere' },
     };
 
     async function loadCalendarInfo() {
@@ -750,10 +750,13 @@
       if (data.upcoming_events && data.upcoming_events.length > 0) {
         const list = document.getElementById('cal-events-list');
         list.innerHTML = data.upcoming_events.map(e => {
-          const color = SHOW_AS_COLORS[e.show_as] || 'text-gray-300';
+          const style = SHOW_AS_STYLES[e.show_as] || { dot: 'bg-gray-500', label: 'Free' };
           const label = e.is_all_day ? 'All day' : e.start_label;
-          return `<div class="flex justify-between items-baseline gap-2">
-            <span class="text-sm ${color} truncate">${e.subject || '(no subject)'}</span>
+          return `<div class="flex justify-between items-center gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="w-2 h-2 rounded-full flex-shrink-0 ${style.dot}" title="${style.label}"></span>
+              <span class="text-sm text-gray-300 truncate">${escHtml(e.subject || '(no subject)')}</span>
+            </div>
             <span class="text-xs text-gray-500 flex-shrink-0">${label}</span>
           </div>`;
         }).join('');
