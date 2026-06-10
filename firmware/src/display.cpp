@@ -140,6 +140,9 @@ void display_show_preset(DisplayState state) {
         case STATE_OOF:
             show_progmem_jpeg(PRESET_OOF_DATA, PRESET_OOF_LEN);
             break;
+        case STATE_AVAILABLE:
+            show_progmem_jpeg(PRESET_AVAILABLE_DATA, PRESET_AVAILABLE_LEN);
+            break;
         case STATE_OFF:
         default:
             gfx->fillScreen(BLACK);

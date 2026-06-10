@@ -176,7 +176,8 @@ class BLEClient:
                 await self._write(client, [OP_SET_PRESET, int(state)])
                 logger.info("Sent: PRESET OFF")
 
-            elif state in (DisplayState.IN_MEETING, DisplayState.WFH, DisplayState.OOF):
+            elif state in (DisplayState.IN_MEETING, DisplayState.WFH,
+                           DisplayState.OOF, DisplayState.AVAILABLE):
                 await self._write(client, [OP_SET_PRESET, int(state)])
                 logger.info(f"Sent: PRESET {state.name}")
 

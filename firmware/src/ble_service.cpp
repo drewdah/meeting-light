@@ -60,7 +60,10 @@ class StateCommandCallback : public NimBLECharacteristicCallbacks {
             case OP_SET_PRESET: {
                 if (len < 2) break;
                 uint8_t state_id = data[1];
-                if (state_id > STATE_OOF) break;
+                // Only allow firmware preset states; STATE_CUSTOM_TEXT/IMAGE/SLEEPING are not presets
+                if (state_id != STATE_OFF && state_id != STATE_IN_MEETING &&
+                    state_id != STATE_WFH  && state_id != STATE_OOF &&
+                    state_id != STATE_AVAILABLE) break;
                 cmd.valid = true;
                 cmd.set_state = true;
                 cmd.state = (DisplayState)state_id;

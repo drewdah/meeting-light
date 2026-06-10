@@ -68,6 +68,7 @@
 #define OP_SET_MUTE        0x0B  // [0=unmute, 1=mute]
 
 // --- Display States ---
+// Values must match service/src/state_machine.py DisplayState enum
 enum DisplayState : uint8_t {
     STATE_OFF = 0,
     STATE_IN_MEETING = 1,
@@ -75,6 +76,8 @@ enum DisplayState : uint8_t {
     STATE_OOF = 3,
     STATE_CUSTOM_TEXT = 4,
     STATE_CUSTOM_IMAGE = 5,
+    // 6 = SLEEPING (service-side only, sent as OP_SLEEP not OP_SET_PRESET)
+    STATE_AVAILABLE = 7,
 };
 
 // --- Power ---

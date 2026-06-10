@@ -3,9 +3,12 @@ State machine for the meeting light.
 
 Priority (highest wins):
   1. Manual override (set via web UI or buttons, with optional expiry)
-  2. Calendar-detected state (from Graph API)
-  3. Schedule-based state (sleeping outside business hours)
-  4. Default: OFF
+  2. Schedule-based state (sleeping outside business hours)
+  3. Calendar-detected state from Graph API:
+       a. WFH  — work location = home (presence API) or all-day WFH event
+       b. OOF  — mailbox auto-reply enabled or OOF calendar event
+       c. IN_MEETING — non-all-day busy/tentative event happening now
+       d. AVAILABLE — in office, no active meeting
 """
 
 import asyncio
@@ -29,6 +32,7 @@ class DisplayState(IntEnum):
     CUSTOM_TEXT = 4
     CUSTOM_IMAGE = 5
     SLEEPING = 6  # service-side only, sent as SLEEP command
+    AVAILABLE = 7  # in office, no active meeting — rendered as custom image
 
 
 @dataclass

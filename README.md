@@ -1,5 +1,5 @@
 # Meeting Light
-A professional office status display for a Waveshare ESP32-C6 1.8" Touch AMOLED, mounted in an office window. Shows your current status — In a Meeting, Working From Home, Out of Office, or a custom message — to coworkers passing by.
+A professional office status display for a Waveshare ESP32-C6 1.8" Touch AMOLED, mounted in an office window. Shows your current status — Available, In a Meeting, Working From Home, Out of Office, or a custom message — to coworkers passing by.
 
 <p align="center">
   <img src="assets/screenshot-1.png" width="53%" alt="Meeting Light web UI" />
@@ -18,11 +18,12 @@ ESP32-C6 AMOLED  <──BLE──>  Mini PC Service  <──Graph API──>  Mi
 
 ## Features
 
-- **Automatic detection** — polls Outlook or Google calendar for meetings, WFH location, and Out of Office status
+- **Automatic detection** — polls Outlook or Google calendar for meetings, WFH location, and Out of Office status; shows **Available** when in the office with no active meeting
 - **Emoji + text display** — full-resolution images rendered service-side with any emoji and custom text, transferred to the display over BLE
 - **Full emoji picker** — pick any emoji from the web UI; no pre-compilation required
 - **Preview before send** — see exactly what will appear on screen, with font size +/− controls
-- **Manual overrides** — preset buttons (In a Meeting, WFH, OOF) or custom message with background color and emoji
+- **Calendar info card** — dashboard shows signed-in user, Teams presence, work location, and upcoming meetings at a glance
+- **Manual overrides** — preset buttons (Available, In a Meeting, WFH, OOF) or custom message with background color and emoji
 - **Override expiry** — set duration (30 min, 1 hr, end of day, etc.) before reverting to calendar state
 - **Boot button controls** — tap to cycle through preset states; hold 3 seconds to reboot
 - **Boot splash** — shows a 💡 Meeting Light logo on startup while connecting to the service
@@ -39,6 +40,7 @@ ESP32-C6 AMOLED  <──BLE──>  Mini PC Service  <──Graph API──>  Mi
 
 | State | Emoji | Background |
 |-------|-------|------------|
+| Available | ☀️ | Amber |
 | In a Meeting | 🔴 | Red |
 | Working From Home | 🏠 | Dark blue |
 | Out of Office | ✈️ | Dark purple |
@@ -57,7 +59,7 @@ The device has two buttons — **BOOT** (side) and **PWR** (side):
 
 | Gesture | Action |
 |---------|--------|
-| Tap BOOT | Cycle through Off → In a Meeting → WFH → Out of Office |
+| Tap BOOT | Cycle through Off → In a Meeting → WFH → Out of Office → Available |
 | Hold BOOT 3s | Reboot device |
 
 ## Enclosure
@@ -99,8 +101,8 @@ pio run -t upload --upload-port COM9   # flash via USB-C (adjust port)
 
 To regenerate the pre-compiled preset and boot splash images (run from repo root after changing the service rendering):
 ```bash
-python firmware/tools/gen_preset_images.py   # In a Meeting, WFH, OOF
-python firmware/tools/gen_boot_splash.py     # Boot splash
+python3 firmware/tools/gen_preset_images.py   # Available, In a Meeting, WFH, OOF
+python3 firmware/tools/gen_boot_splash.py     # Boot splash
 ```
 Then reflash the firmware.
 
@@ -126,7 +128,7 @@ Open `.env` and fill in your values — everything here is passed as environment
 | `ESP32_MAC_ADDRESS` | Always | BLE MAC of your device (see *Finding Your ESP32 MAC Address* below) |
 | `CALENDAR_PROVIDER` | Always | `microsoft` (default) or `google` |
 | `MS_GRAPH_CLIENT_ID` | Microsoft | Azure public-client app ID — see *One-time provider setup* |
-| `MS_GRAPH_TENANT_ID` | Microsoft | `organizations` for work/school accounts (default) |
+| `MS_GRAPH_TENANT_ID` | Microsoft | Your tenant GUID (Directory ID from Azure app registration Overview) |
 | `GOOGLE_CLIENT_ID` | Google | OAuth client ID from Google Cloud — see *One-time provider setup* |
 | `GOOGLE_CLIENT_SECRET` | Google | OAuth client secret (confidential — never commit) |
 | `TIMEZONE` | Optional | IANA timezone, e.g. `America/New_York` |
@@ -178,10 +180,11 @@ The app is pre-registered for both providers — each deployer just picks a prov
 signs in; there's no cloud console work per deployment. Each person authenticates with
 their own Microsoft/Google account via the sign-in flow in the web UI.
 
-**What gets detected:**
-- **In a Meeting** — any busy/opaque calendar event happening right now
-- **Working From Home** — all-day WFH events (Microsoft) or [Working Location](https://support.google.com/calendar/answer/11896660) → Home Office (Google)
+**What gets detected (priority order):**
+- **Working From Home** — Teams/Outlook work location set to Home (Microsoft presence API), all-day WFH events, or [Working Location](https://support.google.com/calendar/answer/11896660) → Home Office (Google)
 - **Out of Office** — OOF events or scheduled automatic replies (Microsoft); native Out of Office events (Google)
+- **In a Meeting** — any busy/tentative calendar event happening right now
+- **Available** — in the office with no active meeting (Microsoft only; Google defaults to Available)
 
 #### Google Testing Mode limit
 
@@ -214,7 +217,7 @@ then signs in with their own account — no per-person cloud console work requir
    - Search and add: `Calendars.Read`, `Presence.Read`, `User.Read`, `MailboxSettings.Read`
    - Click **Grant admin consent** if the button appears (required for org accounts)
 
-> **Tenant ID note**: the `.env` default `MS_GRAPH_TENANT_ID=organizations` works for work/school accounts. For personal Microsoft accounts change it to `common`.
+> **Tenant ID note**: set `MS_GRAPH_TENANT_ID` to your actual tenant GUID (visible on the app registration Overview page as *Directory (tenant) ID*). `organizations` does not work for single-tenant registrations. Use `common` only for multi-tenant apps that allow personal Microsoft accounts.
 
 **Google** — [console.cloud.google.com](https://console.cloud.google.com) → new project:
 - Enable the **Google Calendar API**
@@ -234,6 +237,74 @@ python scan.py
 ```
 The device advertises as `MeetingLight-XXXX` (last 2 MAC bytes). Set `ESP32_MAC_ADDRESS` in `.env`, or enter it in the web UI under ⚙️ Settings and click **↺ Reconnect**. The service will also auto-discover any `MeetingLight-XXXX` device if no MAC is configured.
 
+### Deploying on Proxmox (Docker in LXC)
+
+This setup runs the service inside a Docker container inside a **privileged LXC container** on a Proxmox node. Bluetooth is provided by the Proxmox host's BlueZ via a shared D-Bus socket — the LXC container gets a working `/run/dbus` without running BlueZ itself.
+
+#### Prerequisites on the Proxmox host
+
+1. **Install BlueZ on the host** (not inside the LXC):
+   ```bash
+   apt install bluez
+   systemctl enable --now bluetooth
+   ```
+
+2. **Bind the host D-Bus socket into the LXC** — edit `/etc/pve/lxc/<id>.conf`:
+   ```
+   lxc.cgroup2.devices.allow: a
+   lxc.cap.drop:
+   lxc.mount.entry: /dev/bus/usb dev/bus/usb none bind,optional,create=dir
+   lxc.mount.entry: /dev/rfkill dev/rfkill none bind,optional,create=file
+   lxc.mount.entry: /run/dbus mnt/host-dbus none bind,create=dir
+   ```
+   > The `/run/dbus` → `/mnt/host-dbus` indirection is required because `/run` inside the LXC is a tmpfs that gets mounted after LXC bind mounts are processed.
+
+3. **Create a systemd mount unit inside the LXC** (`/etc/systemd/system/run-dbus.mount`) to relay the socket into `/run/dbus` at boot:
+   ```ini
+   [Unit]
+   Description=Bind mount host BlueZ D-Bus socket
+   DefaultDependencies=no
+   After=tmp.mount
+
+   [Mount]
+   What=/mnt/host-dbus
+   Where=/run/dbus
+   Type=none
+   Options=bind
+
+   [Install]
+   WantedBy=sysinit.target
+   ```
+   ```bash
+   systemctl enable run-dbus.mount
+   ```
+
+#### Deploying the service inside the LXC
+
+```bash
+# Inside the LXC
+apt install docker.io docker-compose-plugin git
+
+# Fix Docker cgroup driver (required in LXC)
+mkdir -p /etc/docker
+echo '{"exec-opts": ["native.cgroupdriver=cgroupfs"]}' > /etc/docker/daemon.json
+systemctl restart docker
+
+# Clone and configure
+git clone https://github.com/drewdah/meeting-light /opt/meeting-light
+cp /opt/meeting-light/service/.env.example /opt/meeting-light/service/.env
+# Edit .env with your MS_GRAPH_CLIENT_ID, MS_GRAPH_TENANT_ID, TIMEZONE, etc.
+
+cd /opt/meeting-light/service
+docker compose up -d
+```
+
+> **Note**: If you update `.env`, run `docker compose up -d --force-recreate` — `docker compose restart` does not reload environment files.
+
+#### Docker Compose network mode
+
+The service's `compose.yml` uses `network_mode: host` and `privileged: true` so the container has direct access to the LXC's D-Bus socket (`/run/dbus`) and the shared Bluetooth adapter.
+
 ## Configuration
 
 All settings are configurable in the web UI under ⚙️ Settings:
@@ -249,8 +320,8 @@ All settings are configurable in the web UI under ⚙️ Settings:
 
 ## Architecture Notes
 
-- **State priority**: Manual override > Calendar-detected > Schedule (sleep) > Off
+- **State priority**: Manual override > WFH (work location/all-day event) > OOF (auto-reply/event) > In a Meeting > Available > Schedule (sleep) > Off
 - **Image transfer**: Service renders full 368×448 JPEG using Pillow (Segoe UI Emoji on Windows), transfers in ~490-byte acknowledged BLE chunks
-- **Preset images**: In a Meeting, WFH, OOF, and the boot splash are pre-compiled as JPEG byte arrays in firmware (`preset_images.h`, `boot_splash.h`). The boot button cycles through these instantly with no BLE transfer. Re-run the generator scripts and reflash to update them.
+- **Preset images**: Available, In a Meeting, WFH, OOF, and the boot splash are pre-compiled as JPEG byte arrays in firmware (`preset_images.h`, `boot_splash.h`). The boot button cycles through these instantly with no BLE transfer. Re-run the generator scripts and reflash to update them.
 - **BLE**: NimBLE peripheral on ESP32, bleak central on mini PC. Custom GATT service with state command + device status characteristics
 - **Power**: AXP2101 PMIC reports battery %, voltage, charging state, and USB/VBUS presence over BLE. AMOLED with mostly-dark backgrounds; device deep-sleeps and wakes every 2 minutes to advertise BLE. Deep sleep is skipped entirely when USB power is connected (VBUS detected). Hardware note: GPIO wakeup from deep sleep requires LP GPIOs (0–7) on ESP32-C6 — all are consumed by the display bus and I2C, so only RTC timer wakeup is available.

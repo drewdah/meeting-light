@@ -33,7 +33,8 @@ static void show_saved_state() {
     DisplayState saved = state_get_current();
     if (saved == STATE_OFF) {
         display_off();
-    } else if (saved == STATE_IN_MEETING || saved == STATE_WFH || saved == STATE_OOF) {
+    } else if (saved == STATE_IN_MEETING || saved == STATE_WFH ||
+               saved == STATE_OOF       || saved == STATE_AVAILABLE) {
         display_on();
         display_show_preset(saved);
     } else {
@@ -45,7 +46,7 @@ static void show_saved_state() {
 
 static unsigned long last_battery_report = 0;
 static const DisplayState PRESET_CYCLE[] = {
-    STATE_OFF, STATE_IN_MEETING, STATE_WFH, STATE_OOF
+    STATE_OFF, STATE_IN_MEETING, STATE_WFH, STATE_OOF, STATE_AVAILABLE
 };
 static const uint8_t PRESET_COUNT = sizeof(PRESET_CYCLE) / sizeof(PRESET_CYCLE[0]);
 static uint8_t cycle_index = 0;

@@ -23,6 +23,7 @@ PRESETS = [
     ("IN_MEETING", "🔴", "In a\nMeeting",      200, 20,  20),
     ("WFH",        "🏠", "Working\nFrom Home",   10, 30, 120),
     ("OOF",        "✈️", "Out of\nOffice",       60,  0, 120),
+    ("AVAILABLE",  "☀️", "Available",           140, 90,   0),
 ]
 
 

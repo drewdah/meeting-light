@@ -6,7 +6,7 @@ Polls calendar and presence to determine display state.
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import aiohttp
@@ -63,6 +63,8 @@ class GraphClient(CalendarProvider):
         """Start device code auth flow. Returns dict with user_code and verification_uri."""
         app = self._get_app()
         flow = app.initiate_device_flow(scopes=SCOPES)
+        if "error" in flow:
+            raise RuntimeError(f"MSAL device flow error: {flow.get('error')} — {flow.get('error_description')}")
         self._device_code_info = flow
         logger.info(f"Device code auth: go to {flow['verification_uri']} and enter {flow['user_code']}")
         return flow
@@ -125,50 +127,120 @@ class GraphClient(CalendarProvider):
         now = datetime.now(settings.tz)
         now_iso = now.isoformat()
 
-        # --- Check calendar events happening right now ---
-        data = await self._get(
-            f"/me/calendarView"
-            f"?startDateTime={now_iso}&endDateTime={now_iso}"
-            f"&$select=subject,showAs,isAllDay,location"
-            f"&$filter=showAs ne 'free' and showAs ne 'unknown'"
-            f"&$top=10"
+        presence, events_data, mailbox = await asyncio.gather(
+            self._get("/me/presence"),
+            self._get(
+                f"/me/calendarView"
+                f"?startDateTime={now_iso}&endDateTime={now_iso}"
+                f"&$select=subject,showAs,isAllDay,location"
+                f"&$top=10"
+            ),
+            self._get("/me/mailboxSettings"),
         )
 
-        if data and data.get("value"):
-            for event in data["value"]:
-                show_as = event.get("showAs", "").lower()
+        # 1. Work location = home → WFH all day
+        work_loc = (presence or {}).get("workLocation", {}).get("workLocationType", "")
+        if work_loc == "home":
+            return DisplayState.WFH
 
-                if show_as == "oof":
-                    return DisplayState.OOF
-
-                # Non-all-day busy/tentative event = in a meeting
-                if not event.get("isAllDay") and show_as in ("busy", "tentative", "workingelsewhere"):
-                    return DisplayState.IN_MEETING
-
-                # All-day event with WFH location
+        # Fallback: all-day event with WFH keywords
+        if events_data:
+            for event in events_data.get("value", []):
                 if event.get("isAllDay"):
                     loc = event.get("location", {}).get("displayName", "").lower()
                     subject = event.get("subject", "").lower()
                     if any(w in loc or w in subject for w in ("home", "remote", "wfh")):
                         return DisplayState.WFH
 
-        # --- Check OOF via mailbox settings ---
-        mailbox = await self._get("/me/mailboxSettings")
+        # 2. OOF → OOF all day
+        if events_data:
+            for event in events_data.get("value", []):
+                if event.get("showAs", "").lower() == "oof":
+                    return DisplayState.OOF
+
         if mailbox:
             oof = mailbox.get("automaticRepliesSetting", {})
             if oof.get("status") == "alwaysEnabled":
                 return DisplayState.OOF
             if oof.get("status") == "scheduled":
-                # Check if we're within the scheduled window
                 start = oof.get("scheduledStartDateTime", {}).get("dateTime")
-                end = oof.get("scheduledEndDateTime", {}).get("dateTime")
-                if start and end:
+                end_dt = oof.get("scheduledEndDateTime", {}).get("dateTime")
+                if start and end_dt:
                     oof_start = datetime.fromisoformat(start).replace(tzinfo=timezone.utc)
-                    oof_end = datetime.fromisoformat(end).replace(tzinfo=timezone.utc)
+                    oof_end = datetime.fromisoformat(end_dt).replace(tzinfo=timezone.utc)
                     if oof_start <= now.astimezone(timezone.utc) <= oof_end:
                         return DisplayState.OOF
 
-        return DisplayState.OFF
+        # 3. Active meeting
+        if events_data:
+            for event in events_data.get("value", []):
+                show_as = event.get("showAs", "").lower()
+                if not event.get("isAllDay") and show_as in ("busy", "tentative", "workingelsewhere"):
+                    return DisplayState.IN_MEETING
+
+        # 4. In office, no active meeting
+        return DisplayState.AVAILABLE
+
+    async def get_calendar_info(self) -> Optional[dict]:
+        """Return user info, upcoming events, and presence for the dashboard."""
+        if not self._auth_complete:
+            return None
+
+        now = datetime.now(settings.tz)
+        end = now + timedelta(days=7)
+
+        user, events_data, presence = await asyncio.gather(
+            self._get("/me?$select=displayName,mail,userPrincipalName"),
+            self._get(
+                f"/me/calendarView"
+                f"?startDateTime={now.isoformat()}&endDateTime={end.isoformat()}"
+                f"&$select=subject,start,end,showAs,isAllDay"
+                f"&$filter=showAs ne 'free'"
+                f"&$orderby=start/dateTime"
+                f"&$top=5"
+            ),
+            self._get("/me/presence"),
+        )
+
+        result = {}
+
+        if user:
+            result["user"] = {
+                "display_name": user.get("displayName"),
+                "email": user.get("mail") or user.get("userPrincipalName"),
+            }
+
+        if events_data:
+            events = []
+            for e in events_data.get("value", []):
+                start_str = e.get("start", {}).get("dateTime", "")
+                try:
+                    # Graph returns UTC when no Prefer timezone header is sent
+                    dt = datetime.fromisoformat(start_str.split(".")[0]).replace(tzinfo=timezone.utc)
+                    dt_local = dt.astimezone(settings.tz)
+                    if dt_local.date() == now.date():
+                        label = dt_local.strftime("%-I:%M %p")
+                    else:
+                        label = dt_local.strftime("%a %-m/%-d %-I:%M %p")
+                except Exception:
+                    label = start_str
+                events.append({
+                    "subject": e.get("subject"),
+                    "start_label": label,
+                    "is_all_day": e.get("isAllDay"),
+                    "show_as": e.get("showAs"),
+                })
+            result["upcoming_events"] = events
+
+        if presence:
+            work_loc = presence.get("workLocation", {})
+            result["presence"] = {
+                "availability": presence.get("availability"),
+                "activity": presence.get("activity"),
+                "work_location": work_loc.get("workLocationType"),
+            }
+
+        return result
 
     @property
     def is_authenticated(self) -> bool:

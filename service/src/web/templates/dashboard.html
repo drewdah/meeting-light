@@ -97,6 +97,29 @@
     </div>
 
 
+    <!-- Calendar Info Card (only when authenticated) -->
+    {% if snap.authenticated %}
+    <div class="bg-gray-800 rounded-xl p-5" id="calendar-info-card">
+      <!-- User row -->
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <div id="cal-user-name" class="font-semibold text-sm"></div>
+          <div id="cal-user-email" class="text-xs text-gray-400"></div>
+        </div>
+        <div id="cal-presence" class="hidden items-center gap-2">
+          <span id="cal-presence-dot" class="w-2 h-2 rounded-full flex-shrink-0"></span>
+          <span id="cal-presence-label" class="text-xs text-gray-400"></span>
+        </div>
+      </div>
+      <!-- Upcoming events -->
+      <div id="cal-events" class="hidden">
+        <div class="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2">Upcoming</div>
+        <div id="cal-events-list" class="space-y-2"></div>
+      </div>
+      <div id="cal-loading" class="text-xs text-gray-600 text-center py-1">Loading…</div>
+    </div>
+    {% endif %}
+
     <!-- Override Panel -->
     <div class="bg-gray-800 rounded-xl p-6">
       <h2 class="font-semibold mb-4">Manual Override</h2>
@@ -238,7 +261,7 @@
                 </div>
               </div>
               <button type="button" onclick="startCalendarAuth()"
-                class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-sm">
+                class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded text-sm flex-shrink-0 ml-3">
                 {{ 'Re-authenticate' if snap.authenticated else 'Sign in' }}
               </button>
             </div>
@@ -550,6 +573,12 @@
     setInterval(poll, 2000);
     poll();
 
+    // Load calendar info once on page load if authenticated, refresh every 5 min
+    {% if snap.authenticated %}
+    loadCalendarInfo();
+    setInterval(loadCalendarInfo, 300000);
+    {% endif %}
+
     async function bleReconnect() {
       await fetch('/api/ble/reconnect', { method: 'POST' });
       refreshStatus();
@@ -645,6 +674,10 @@
 
       const resp = await fetch('/api/auth/start', { method: 'POST' });
       const data = await resp.json();
+      if (!resp.ok) {
+        alert('Sign in failed: ' + (data.error || resp.status));
+        return;
+      }
       if (data.user_code) {
         document.getElementById('dc-url').textContent = data.verification_uri;
         document.getElementById('dc-code').textContent = data.user_code;
@@ -657,6 +690,7 @@
       const data = await resp.json();
       if (data.authenticated) {
         document.getElementById('device-code-box').classList.add('hidden');
+        await loadCalendarInfo();
         location.reload();
       } else {
         alert('Not authenticated yet — wait a moment and try again.');
@@ -666,6 +700,69 @@
     // Keep old names for backward compatibility with auth banner
     async function startAuth() { await startCalendarAuth(); }
     async function pollAuth() { await pollCalendarAuth(); }
+
+    const PRESENCE_STYLES = {
+      Available:      { dot: 'bg-green-400',  label: 'Available' },
+      AvailableIdle:  { dot: 'bg-green-400',  label: 'Available (idle)' },
+      Away:           { dot: 'bg-yellow-400', label: 'Away' },
+      BeRightBack:    { dot: 'bg-yellow-400', label: 'Be right back' },
+      Busy:           { dot: 'bg-red-400',    label: 'Busy' },
+      DoNotDisturb:   { dot: 'bg-red-600',    label: 'Do not disturb' },
+      InACall:        { dot: 'bg-red-400',    label: 'In a call' },
+      InAMeeting:     { dot: 'bg-red-400',    label: 'In a meeting' },
+      Presenting:     { dot: 'bg-red-500',    label: 'Presenting' },
+      Offline:        { dot: 'bg-gray-500',   label: 'Offline' },
+      OffWork:        { dot: 'bg-gray-500',   label: 'Off work' },
+      OutOfOffice:    { dot: 'bg-purple-400', label: 'Out of office' },
+    };
+
+    const SHOW_AS_COLORS = {
+      busy:             'text-red-400',
+      tentative:        'text-yellow-400',
+      oof:              'text-purple-400',
+      workingElsewhere: 'text-blue-400',
+    };
+
+    async function loadCalendarInfo() {
+      const card = document.getElementById('calendar-info-card');
+      if (!card) return;
+      const resp = await fetch('/api/calendar/info');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const loading = document.getElementById('cal-loading');
+      if (loading) loading.remove();
+      if (!data || Object.keys(data).length === 0) return;
+
+      if (data.user) {
+        document.getElementById('cal-user-name').textContent = data.user.display_name || '';
+        document.getElementById('cal-user-email').textContent = data.user.email || '';
+      }
+
+      if (data.presence) {
+        const activity = data.presence.activity || data.presence.availability || '';
+        const style = PRESENCE_STYLES[activity] || { dot: 'bg-gray-400', label: activity };
+        const WORK_LOC_LABELS = { office: '🏢 In the office', remote: '💻 Working remotely', home: '🏠 Working from home' };
+        const locLabel = WORK_LOC_LABELS[data.presence.work_location] || '';
+        const parts = [style.label, locLabel].filter(Boolean);
+        document.getElementById('cal-presence-dot').className = `w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`;
+        document.getElementById('cal-presence-label').textContent = parts.join(' · ');
+        document.getElementById('cal-presence').classList.remove('hidden');
+        document.getElementById('cal-presence').classList.add('flex');
+      }
+
+      if (data.upcoming_events && data.upcoming_events.length > 0) {
+        const list = document.getElementById('cal-events-list');
+        list.innerHTML = data.upcoming_events.map(e => {
+          const color = SHOW_AS_COLORS[e.show_as] || 'text-gray-300';
+          const label = e.is_all_day ? 'All day' : e.start_label;
+          return `<div class="flex justify-between items-baseline gap-2">
+            <span class="text-sm ${color} truncate">${e.subject || '(no subject)'}</span>
+            <span class="text-xs text-gray-500 flex-shrink-0">${label}</span>
+          </div>`;
+        }).join('');
+        document.getElementById('cal-events').classList.remove('hidden');
+      }
+    }
 
     async function refreshStatus() {
       const resp = await fetch('/api/status');

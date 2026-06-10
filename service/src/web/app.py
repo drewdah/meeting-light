@@ -61,7 +61,8 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 # --- Template helpers ---
 
 STATE_LABELS = {
-    DisplayState.OFF: "Available / Off",
+    DisplayState.OFF: "Off",
+    DisplayState.AVAILABLE: "Available",
     DisplayState.IN_MEETING: "In a Meeting",
     DisplayState.WFH: "Working From Home",
     DisplayState.OOF: "Out of Office",
@@ -71,6 +72,7 @@ STATE_LABELS = {
 
 STATE_COLORS = {
     DisplayState.OFF: "gray",
+    DisplayState.AVAILABLE: "yellow",
     DisplayState.IN_MEETING: "red",
     DisplayState.WFH: "blue",
     DisplayState.OOF: "purple",
@@ -195,12 +197,29 @@ async def clear_logs():
 
 @app.post("/api/auth/start")
 async def start_auth():
-    flow = await get_calendar_provider().start_auth_flow()
+    try:
+        flow = await get_calendar_provider().start_auth_flow()
+    except Exception as e:
+        logger.error(f"Auth start failed: {e}")
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=500, content={"error": str(e)})
     return {
         "user_code": flow.get("user_code"),
         "verification_uri": flow.get("verification_uri"),
         "message": flow.get("message"),
     }
+
+
+@app.get("/api/calendar/info")
+async def calendar_info():
+    provider = get_calendar_provider()
+    if not provider.is_authenticated or not hasattr(provider, "get_calendar_info"):
+        return {}
+    try:
+        return await provider.get_calendar_info() or {}
+    except Exception as e:
+        logger.error(f"calendar_info error: {e}")
+        return {}
 
 
 @app.post("/api/auth/poll")
