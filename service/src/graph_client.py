@@ -139,7 +139,7 @@ class GraphClient(CalendarProvider):
         )
 
         # 1. Work location = home → WFH all day
-        work_loc = (presence or {}).get("workLocation", {}).get("workLocationType", "")
+        work_loc = ((presence or {}).get("workLocation") or {}).get("workLocationType", "")
         if work_loc == "home":
             return DisplayState.WFH
 
@@ -217,10 +217,11 @@ class GraphClient(CalendarProvider):
                     # Graph returns UTC when no Prefer timezone header is sent
                     dt = datetime.fromisoformat(start_str.split(".")[0]).replace(tzinfo=timezone.utc)
                     dt_local = dt.astimezone(settings.tz)
+                    time_part = dt_local.strftime("%I:%M %p").lstrip("0")
                     if dt_local.date() == now.date():
-                        label = dt_local.strftime("%-I:%M %p")
+                        label = time_part
                     else:
-                        label = dt_local.strftime("%a %-m/%-d %-I:%M %p")
+                        label = f"{dt_local.strftime('%a')} {dt_local.month}/{dt_local.day} {time_part}"
                 except Exception:
                     label = start_str
                 events.append({
@@ -232,7 +233,7 @@ class GraphClient(CalendarProvider):
             result["upcoming_events"] = events
 
         if presence:
-            work_loc = presence.get("workLocation", {})
+            work_loc = presence.get("workLocation") or {}
             result["presence"] = {
                 "availability": presence.get("availability"),
                 "activity": presence.get("activity"),

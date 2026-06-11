@@ -224,8 +224,8 @@ void ble_init() {
 
     NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(BLE_SERVICE_UUID);
-    pAdvertising->setMinInterval(160);  // 100ms (* 0.625ms)
-    pAdvertising->setMaxInterval(800);  // 500ms
+    pAdvertising->setMinInterval(160);  // 100ms (units of 0.625ms)
+    pAdvertising->setMaxInterval(320);  // 200ms — tighter window for faster initial connection
     pAdvertising->start();
 
     Serial.println("BLE: advertising started");

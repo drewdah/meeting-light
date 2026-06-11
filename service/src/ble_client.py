@@ -73,16 +73,26 @@ class BLEClient:
             try:
                 await self._connect_and_run()
             except Exception as e:
-                logger.warning(f"BLE connection error: {e}")
+                logger.warning(f"BLE connection error: {type(e).__name__}: {e}")
             if self._running:
                 logger.info(f"Reconnecting in {RECONNECT_INTERVAL}s...")
                 await asyncio.sleep(RECONNECT_INTERVAL)
 
     async def _connect_and_run(self):
         mac = settings_store_get_mac()
-        if not mac:
+        if mac:
+            # Always scan first — Windows WinRT BLE requires the device to be in
+            # the OS scan cache before connect-by-address works. Going straight to
+            # BleakClient(mac) without scanning causes immediate "not found" errors
+            # on every attempt until the cache is warm, producing the retry storm.
+            logger.info(f"Scanning for {mac}...")
+            device = await BleakScanner.find_device_by_address(mac, timeout=15)
+            if not device:
+                logger.warning(f"Device {mac} not found during scan")
+                return
+            logger.info(f"Found {device.name or 'MeetingLight'} at {mac}")
+        else:
             logger.info("No ESP32 MAC configured, scanning for 'MeetingLight' (prefix)...")
-            # Use prefix match so suffixed names ("MeetingLight-XXXX") are discovered
             devices = await BleakScanner.discover(timeout=10)
             device = next((d for d in devices if (d.name or "").startswith("MeetingLight")), None)
             if not device:
@@ -91,8 +101,8 @@ class BLEClient:
             mac = device.address
             logger.info(f"Found {device.name} at {mac}")
 
-        logger.info(f"Connecting to {mac}...")
-        async with BleakClient(mac, disconnected_callback=self._on_disconnect) as client:
+        logger.info(f"Connecting to {device.name or mac}...")
+        async with BleakClient(device, disconnected_callback=self._on_disconnect, timeout=30.0) as client:
             self._client = client
             self._connected = True
             logger.info("BLE connected")

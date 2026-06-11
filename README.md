@@ -40,7 +40,7 @@ ESP32-C6 AMOLED  <──BLE──>  Mini PC Service  <──Graph API──>  Mi
 
 | State | Emoji | Background |
 |-------|-------|------------|
-| Available | ☀️ | Amber |
+| Available | ☀️ | Green |
 | In a Meeting | 🔴 | Red |
 | Working From Home | 🏠 | Dark blue |
 | Out of Office | ✈️ | Dark purple |

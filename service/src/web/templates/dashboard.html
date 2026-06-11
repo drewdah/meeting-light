@@ -137,7 +137,7 @@
       <h2 class="font-semibold mb-4">Manual Override</h2>
 
       <!-- Preset Buttons -->
-      <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="grid grid-cols-2 gap-3 mb-3">
         <button onclick="setPreset(1)" class="bg-red-700 hover:bg-red-600 text-white py-3 rounded-lg font-medium">
           🔴 In a Meeting
         </button>
@@ -147,10 +147,13 @@
         <button onclick="setPreset(3)" class="bg-purple-700 hover:bg-purple-600 text-white py-3 rounded-lg font-medium">
           ✈️ Out of Office
         </button>
-        <button onclick="setPreset(0)" class="bg-gray-600 hover:bg-gray-500 text-white py-3 rounded-lg font-medium">
-          ✖ Clear Override
+        <button onclick="setPreset(7)" class="text-white py-3 rounded-lg font-medium" style="background-color:#1CA800;" onmouseover="this.style.filter='brightness(1.15)'" onmouseout="this.style.filter=''">
+          ☀️ Available
         </button>
       </div>
+      <button onclick="setPreset(0)" class="w-full bg-gray-600 hover:bg-gray-500 text-white py-2 rounded-lg text-sm font-medium mb-4">
+        ✖ Clear Override
+      </button>
 
       <!-- Duration -->
       <div class="mb-4">
