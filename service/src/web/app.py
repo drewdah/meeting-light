@@ -93,6 +93,7 @@ def snapshot_to_dict(snap) -> dict:
         "battery_mv": snap.battery_mv,
         "charging": snap.charging,
         "vbus": snap.vbus,
+        "pir_motion": snap.pir_motion,
         "ble_connected": snap.ble_connected,
         "last_seen": snap.last_seen.isoformat() if snap.last_seen else None,
         "override_expires": snap.override_expires.strftime("%I:%M %p").lstrip("0") if snap.override_expires else None,

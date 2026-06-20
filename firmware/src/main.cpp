@@ -8,6 +8,7 @@
 #include "state.h"
 #include "buttons.h"
 #include "audio.h"
+#include "pir.h"
 
 // Crash loop detection: RTC_NOINIT_ATTR survives software resets but is cleared on power-on.
 // After 3 consecutive crash resets we enter safe mode (stable screen, no retry) to prevent
@@ -27,6 +28,7 @@ static bool audio_status_logged = false;
 enum BootPhase { BOOT_SPLASH, BOOT_WAITING, BOOT_DONE };
 static BootPhase boot_phase = BOOT_DONE;
 static unsigned long splash_start = 0;
+static bool pir_display_blanked = false;
 
 // Apply the saved NVS state to the display (used when exiting boot phases)
 static void show_saved_state() {
@@ -52,6 +54,9 @@ static const uint8_t PRESET_COUNT = sizeof(PRESET_CYCLE) / sizeof(PRESET_CYCLE[0
 static uint8_t cycle_index = 0;
 
 static void on_boot_button() {
+    pir_reset_timer();
+    pir_display_blanked = false;
+
     cycle_index = (cycle_index + 1) % PRESET_COUNT;
     DisplayState new_state = PRESET_CYCLE[cycle_index];
     state_set(new_state);
@@ -70,7 +75,8 @@ static void on_boot_button() {
                       power_get_battery_percent(),
                       power_is_charging(),
                       power_get_battery_mv(),
-                      power_is_vbus_in());
+                      power_is_vbus_in(),
+                      pir_motion_detected());
 
     Serial.printf("Button: state -> %d\n", new_state);
 }
@@ -124,6 +130,7 @@ void setup() {
     state_init();
     display_init();
     buttons_init();
+    pir_init();
     ble_init();
     audio_init();
 
@@ -216,6 +223,9 @@ void loop() {
 
     buttons_check();
 
+    pir_set_enabled(boot_phase == BOOT_DONE && !power_is_vbus_in());
+    pir_update();
+
     // Execute any pending BLE command (deferred from BLE callback to avoid stack overflow)
     PendingCommand cmd;
     if (pending_get(cmd)) {
@@ -230,6 +240,9 @@ void loop() {
             display_set_brightness(cmd.brightness);
         }
         if (cmd.set_state) {
+            pir_reset_timer();
+            pir_display_blanked = false;
+
             state_set(cmd.state);
             audio_play_state_chime();
             if (cmd.state == STATE_OFF) {
@@ -252,8 +265,27 @@ void loop() {
                               power_get_battery_percent(),
                               power_is_charging(),
                               power_get_battery_mv(),
-                              power_is_vbus_in());
+                              power_is_vbus_in(),
+                              pir_motion_detected());
         }
+    }
+
+    // PIR display blanking (battery only, after boot)
+    if (pir_is_enabled() && boot_phase == BOOT_DONE) {
+        if (pir_display_blanked && pir_motion_detected()) {
+            display_on();
+            pir_display_blanked = false;
+            pir_reset_timer();
+            Serial.println("PIR: motion -> display on");
+        } else if (!pir_display_blanked && display_is_on() && pir_has_timed_out()) {
+            display_off();
+            pir_display_blanked = true;
+            Serial.println("PIR: timeout -> display off");
+        }
+    } else if (pir_display_blanked) {
+        display_on();
+        pir_display_blanked = false;
+        Serial.println("PIR: disabled while blanked -> display on");
     }
 
     // Periodic battery status report
@@ -265,7 +297,8 @@ void loop() {
                               power_get_battery_percent(),
                               power_is_charging(),
                               power_get_battery_mv(),
-                              power_is_vbus_in());
+                              power_is_vbus_in(),
+                              pir_motion_detected());
         }
     }
 

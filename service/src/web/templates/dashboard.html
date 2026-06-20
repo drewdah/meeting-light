@@ -84,6 +84,11 @@
             <div class="text-gray-500 text-xs" id="battery-mv">
               {% if snap.battery_mv %}{{ snap.battery_mv }}mV{% endif %}
             </div>
+            <div class="text-gray-500 text-xs mt-1" id="pir-status">
+              {% if snap.ble_connected and not snap.vbus %}
+                <span class="{{ 'text-green-400' if snap.pir_motion else 'text-gray-500' }}">● PIR {{ 'motion' if snap.pir_motion else 'idle' }}</span>
+              {% endif %}
+            </div>
           </div>
 
           <div class="bg-gray-700 rounded-lg p-3">
@@ -816,6 +821,12 @@
         batt.innerHTML = `<span class="text-gray-400">—</span>`;
       } else {
         batt.innerHTML = `<span class="text-gray-500">Unknown</span>`;
+      }
+      const pirStatus = document.getElementById('pir-status');
+      if (data.ble_connected && !data.vbus) {
+        pirStatus.innerHTML = `<span class="${data.pir_motion ? 'text-green-400' : 'text-gray-500'}">● PIR ${data.pir_motion ? 'motion' : 'idle'}</span>`;
+      } else {
+        pirStatus.innerHTML = '';
       }
       const lastSeen = document.getElementById('last-seen');
       if (data.last_seen) {

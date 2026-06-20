@@ -7,7 +7,29 @@
       "WebFetch(domain:docs.waveshare.com)",
       "WebFetch(domain:api.github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "PowerShell($pio = \"C:\\\\Users\\\\Drew\\\\AppData\\\\Local\\\\Packages\\\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\\\LocalCache\\\\local-packages\\\\Python313\\\\Scripts\\\\pio.exe\"; Set-Location \"D:\\\\Projects\\\\meeting-light\\\\firmware\"; & $pio run 2>&1)"
+      "PowerShell($pio = \"C:\\\\Users\\\\Drew\\\\AppData\\\\Local\\\\Packages\\\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\\\LocalCache\\\\local-packages\\\\Python313\\\\Scripts\\\\pio.exe\"; Set-Location \"D:\\\\Projects\\\\meeting-light\\\\firmware\"; & $pio run 2>&1)",
+      "PowerShell($env:PYTHONIOENCODING = \"utf-8\"; $esptool = \"C:\\\\Users\\\\Drew\\\\.platformio\\\\packages\\\\tool-esptoolpy\\\\esptool.py\"; $firmware = \"D:\\\\Projects\\\\meeting-light\\\\firmware\\\\.pio\\\\build\\\\esp32c6\\\\firmware.factory.bin\"; python $esptool --chip esp32c6 --port COM9 --baud 921600 write_flash 0x0 $firmware 2>&1)",
+      "mcp__Autodesk_Fusion__fusion_mcp_read",
+      "mcp__mcp-registry__list_connectors",
+      "mcp__Autodesk_Fusion__fusion_mcp_execute",
+      "Bash(claude mcp *)",
+      "PowerShell(Test-NetConnection -ComputerName 127.0.0.1 -Port 27182 -WarningAction SilentlyContinue)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 27182 -State Listen -ErrorAction SilentlyContinue)",
+      "Bash(python gen_icons.py)",
+      "PowerShell($env:PYTHONUTF8=\"1\"; Set-Location \"D:\\\\Projects\\\\meeting-light\\\\firmware\\\\tools\"; python gen_icons.py 2>&1)",
+      "Bash(grep -rn \"FT\\\\|touch\\\\|ALDO\\\\|BLDO\\\\|AXP\\\\|ldo\\\\|3168\" \"D:/Projects/ESP32-C6-Touch-AMOLED-1.8\" --include=\"*.cpp\" --include=\"*.h\" --include=\"*.ino\" -i 2>/dev/null | grep -v \".pio\" | grep -iE \"ALDO|BLDO|touch|ft316\" | head -40)",
+      "Bash(xargs grep -l \"AXP2101\\\\|XPowers\\\\|pmu\\\\|power\")",
+      "Bash(xargs grep -n \"ALDO\\\\|BLDO\\\\|touch\\\\|display\\\\|sensor\")",
+      "WebFetch(domain:files.waveshare.com)",
+      "Bash(find \"C:/Users/Drew/.platformio\" -name \"esp_sleep.h\" 2>/dev/null | head -10)",
+      "Bash(Get-ChildItem -Path \"D:\\\\Projects\\\\meeting-light\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Read(//d/d/Projects/meeting-light/**)",
+      "Read(//d/d/Projects/meeting-light/service/**)",
+      "Read(//d/d/Projects/meeting-light/service/data/**)",
+      "Bash(.venv/Scripts/python.exe -c \"from src.config import settings; print\\('tenant:', settings.ms_graph_tenant_id\\); print\\('ms_id:', repr\\(settings.ms_graph_client_id\\)\\); print\\('google_id:', repr\\(settings.google_client_id\\)\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"from src.config import settings; print\\('tenant:', settings.ms_graph_tenant_id\\); print\\('ms_id:', repr\\(settings.ms_graph_client_id\\)\\)\")",
+      "Bash(git add *)"
     ]
   }
 }

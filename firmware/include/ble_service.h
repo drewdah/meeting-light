@@ -3,7 +3,7 @@
 #include "config.h"
 
 void ble_init();
-void ble_notify_status(DisplayState state, uint8_t battery_pct, bool charging, uint16_t battery_mv, bool vbus);
+void ble_notify_status(DisplayState state, uint8_t battery_pct, bool charging, uint16_t battery_mv, bool vbus, bool pir_motion);
 bool ble_is_connected();
 String ble_get_mac_address();  // Returns "AA:BB:CC:DD:EE:FF" (uppercase)
 

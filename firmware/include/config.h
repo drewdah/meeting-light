@@ -80,6 +80,10 @@ enum DisplayState : uint8_t {
     STATE_AVAILABLE = 7,
 };
 
+// --- PIR Sensor (AM312) ---
+#define PIR_PIN         17
+#define PIR_TIMEOUT_MS  60000  // 1 min no-motion -> display off
+
 // --- Power ---
 #define BATTERY_READ_INTERVAL_MS  300000  // 5 minutes
 #define DUTY_CYCLE_ON_MS          30000   // 30 seconds on

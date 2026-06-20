@@ -59,6 +59,7 @@ class StateSnapshot:
     battery_mv: Optional[int] = None
     charging: bool = False
     vbus: bool = False
+    pir_motion: bool = False
     ble_connected: bool = False
     last_seen: Optional[datetime] = None
     source: str = "default"  # "override", "calendar", "schedule", "default"
@@ -74,6 +75,7 @@ class StateMachine:
         self._battery_mv: Optional[int] = None
         self._charging: bool = False
         self._vbus: bool = False
+        self._pir_motion: bool = False
         self._ble_connected: bool = False
         self._last_seen: Optional[datetime] = None
         self._lock = asyncio.Lock()
@@ -150,12 +152,14 @@ class StateMachine:
             await self._maybe_emit()
 
     async def update_battery(self, percent: int, mv: int, connected: bool,
-                             charging: bool = False, vbus: bool = False):
+                             charging: bool = False, vbus: bool = False,
+                             pir_motion: bool = False):
         async with self._lock:
             self._battery_percent = percent
             self._battery_mv = mv
             self._charging = charging
             self._vbus = vbus
+            self._pir_motion = pir_motion
             self._ble_connected = connected
             self._last_seen = datetime.now(settings.tz)
 
@@ -192,6 +196,7 @@ class StateMachine:
             battery_mv=self._battery_mv,
             charging=self._charging,
             vbus=self._vbus,
+            pir_motion=self._pir_motion,
             ble_connected=self._ble_connected,
             last_seen=self._last_seen,
             source=source,

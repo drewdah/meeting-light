@@ -20,3 +20,12 @@ service/.env
 # Editor
 .vscode/
 *.swp
+
+# esptool per-chip flash configs (generated)
+configure/
+
+# npm deps (nameplate tooling)
+node_modules/
+
+# Bambu 3MF safety backups
+*_bambu-backup.3mf

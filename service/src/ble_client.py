@@ -161,8 +161,9 @@ class BLEClient:
         charging = bool(data[2])
         batt_mv = data[3] | (data[4] << 8)
         vbus = bool(data[5]) if len(data) >= 6 else False
-        await state_machine.update_battery(batt_pct, batt_mv, True, charging, vbus)
-        logger.debug(f"Battery: {batt_pct}% ({batt_mv}mV) {'[charging]' if charging else ''} {'[USB]' if vbus else ''}")
+        pir_motion = bool(data[6]) if len(data) >= 7 else False
+        await state_machine.update_battery(batt_pct, batt_mv, True, charging, vbus, pir_motion)
+        logger.debug(f"Battery: {batt_pct}% ({batt_mv}mV) {'[charging]' if charging else ''} {'[USB]' if vbus else ''} {'[PIR]' if pir_motion else ''}")
 
     async def _send_pending(self, client: BleakClient):
         if not self._pending_state:
